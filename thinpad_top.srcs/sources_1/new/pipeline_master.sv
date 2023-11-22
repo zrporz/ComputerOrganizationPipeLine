@@ -94,6 +94,10 @@ module pipeline_master #(
   reg[31:0] exme_pc_now_reg;
   instrction_type_t exme_instr_type_reg;
   reg exme_rf_wen;
+  reg exme_state; // this reg just use to store the state of mem_state, not pass down
+  reg[1:0] exme_bias; //same to above, save for lb
+  reg[31:0] exme_inst_reg_copy;
+  reg[5:0] exme_rf_waddr_reg_copy;
 
   // MEM-WB reg
   reg mewb_rf_wen;
@@ -227,16 +231,16 @@ module pipeline_master #(
   //=========== DECODER MODULE END ===========
   
   //=========== Risk and Conflict Solver BEGIN===========
-  logic bubble_IF;
-  logic bubble_ID;
-  logic bubble_EXE;
-  logic bubble_MEM;
-  logic bubble_WB;
-  logic flush_IF;
-  logic flush_ID;
-  logic flush_EXE;
-  logic flush_MEM;
-  logic flush_WB;
+  wire bubble_IF;
+  wire bubble_ID;
+  wire bubble_EXE;
+  wire bubble_MEM;
+  wire bubble_WB;
+  wire flush_IF;
+  wire flush_ID;
+  wire flush_EXE;
+  wire flush_MEM;
+  wire flush_WB;
   hazard_controler u_hazard_controler(
     .wb1_cyc_i(wb1_cyc_o),
     .wb1_ack_i(wb1_ack_i),
@@ -263,8 +267,6 @@ module pipeline_master #(
     .flush_MEM_o(flush_MEM),
     .flush_WB_o(flush_WB)
   );
-
-
   // end
   
   // end
@@ -300,7 +302,7 @@ module pipeline_master #(
       // 32'h200000: leds_r = wb1_we_o;
       32'h400000: leds_r = {11'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB};
       32'h800000: leds_r = {11'b0,flush_IF,flush_ID,flush_EXE,flush_MEM,flush_WB};
-      32'h1000000: leds_r = {7'b0,bubble_MEM,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
+      32'h1000000: leds_r = {3'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
       // 32'h2000000: leds_r = bubble_MEM;
       // 32'h4000000: leds_r = bubble_WB;
       // 32'h8000000: leds_r = flush_ID;
@@ -310,6 +312,70 @@ module pipeline_master #(
       // 32'h80000000: leds_r = flush_WB;
     endcase
   end
+  ila_1 u_ila(
+    .clk(clk_i),
+    .probe0(clk_i),
+    .probe1(rst_i),
+    .probe2(wb0_cyc_o),
+    .probe3(wb0_stb_o),
+    .probe4(wb0_ack_i),
+    .probe5(wb0_adr_o),
+    .probe6(wb0_dat_o),
+    .probe7(wb0_dat_i),
+    .probe8(wb0_sel_o),
+    .probe9(wb0_we_o),
+    .probe10(wb1_cyc_o),
+    .probe11(wb1_stb_o),
+    .probe12(wb1_ack_i),
+    .probe13(wb1_adr_o),
+    .probe14(wb1_dat_o),
+    .probe15(wb1_dat_i),
+    .probe16(wb1_sel_o),
+    .probe17(wb1_we_o),
+    .probe18(dip_sw),
+    .probe19(leds),
+    .probe20(pc_reg),
+    .probe21(ifid_inst_reg),
+    .probe22(ifid_pc_now_reg),
+    .probe23(ifid_instr_type_reg),
+    .probe24(idex_inst_reg),
+    .probe25(idex_rf_rdata_a_reg),
+    .probe26(idex_rf_rdata_b_reg),
+    .probe27(idex_rf_waddr_reg),
+    .probe28(idex_imm_gen_reg),
+    .probe29(idex_pc_now_reg),
+    .probe30(idex_alu_op_reg),
+    .probe31(idex_use_rs2),
+    .probe32(idex_mem_en),
+    .probe33(idex_instr_type_reg),
+    .probe34(idex_rf_wen),
+    .probe35(exme_inst_reg),
+    .probe36(exme_rf_rdata_a_reg),
+    .probe37(exme_rf_rdata_b_reg),
+    .probe38(exme_rf_waddr_reg),
+    .probe39(exme_alu_result_reg),
+    .probe40(exme_rpc_wen),
+    .probe41(exme_mem_en),
+    .probe42(exme_use_rs2),
+    .probe43(exme_pc_now_reg),
+    .probe44(exme_instr_type_reg),
+    .probe45(exme_rf_wen),
+    .probe46(mewb_rf_waddr_reg),
+    .probe47(mewb_rf_wdata_reg),
+    .probe48(mewb_rpc_wdata_reg),
+    .probe49(mewb_rpc_wen),
+    .probe50(mewb_instr_type_reg),
+    .probe51(flush_IF),
+    .probe52(flush_ID),
+    .probe53(flush_EXE),
+    .probe54(flush_MEM),
+    .probe55(flush_WB),
+    .probe56(bubble_IF),
+    .probe57(bubble_ID),
+    .probe58(bubble_EXE),
+    .probe59(bubble_MEM),
+    .probe60(bubble_WB)
+  );
   //=========== DEBUG MODULE END ===========
 
   //=========== ALU MODULE BEGIN ===========
@@ -418,6 +484,10 @@ module pipeline_master #(
       exme_rf_wen <= 1; // Same to above
       exme_rpc_wen <= 0;
       exme_pc_now_reg <= 32'h8000_0000;
+      exme_state <= 0;
+      exme_bias <= 0;
+      exme_inst_reg_copy <= 32'b0010011;
+      exme_rf_waddr_reg_copy <= 5'b0;
 
       // MEM-WB
       mewb_rf_wen <= 1;
@@ -469,10 +539,11 @@ module pipeline_master #(
           ifid_pc_now_reg <= pc_reg;
           ifid_instr_type_reg <= imm_gen_type_o;
         end else begin
-            wb0_stb_o <= 1'b1;
-            wb0_cyc_o <= 1'b1;
-            wb0_we_o <= 1'b0;
-            wb0_sel_o <= 4'b1111;
+          ifid_inst_reg <= 32'b0010011;
+          wb0_stb_o <= 1'b1;
+          wb0_cyc_o <= 1'b1;
+          wb0_we_o <= 1'b0;
+          wb0_sel_o <= 4'b1111;
         end
       end
       // ID
@@ -617,7 +688,9 @@ module pipeline_master #(
         exme_rf_rdata_a_reg <= idex_rf_rdata_a_reg;
         exme_rf_rdata_b_reg <= idex_rf_rdata_b_reg;
         exme_rf_waddr_reg <= idex_rf_waddr_reg;
+        // if(idex_inst_reg!=32'b0010011)begin
         exme_mem_en <= idex_mem_en;
+        // end
         exme_use_rs2 <= idex_use_rs2;
         exme_instr_type_reg <= idex_instr_type_reg;
         exme_pc_now_reg <= idex_pc_now_reg;
@@ -698,20 +771,23 @@ module pipeline_master #(
         mewb_rf_wen <= exme_rf_wen;
         mewb_instr_type_reg <= exme_instr_type_reg;
         
-        if(exme_mem_en)begin // need to visit the memory include LB,LW,SB,SW
+        if(exme_mem_en || exme_state)begin // need to visit the memory include LB,LW,SB,SW
           if(wb1_ack_i)begin
             wb1_cyc_o <= 1'b0;
             wb1_stb_o <= 1'b0;
             wb1_sel_o <= 4'b0000;
             wb1_we_o <= 1'b0;
-            case(exme_inst_reg[6:0])
+            exme_state <= 1'b0;
+            exme_inst_reg_copy <= exme_inst_reg;
+            exme_bias <= 2'b0;
+            case(exme_inst_reg_copy[6:0])
               LB_LW: begin
-                if(exme_inst_reg[14:12] == 3'b000)begin //LB
-                  if(exme_alu_result_reg[1:0]==2'b0) begin
+                if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
+                  if(exme_bias[1:0]==2'b0) begin
                     mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
-                  end else if(exme_alu_result_reg[1:0]==2'b01) begin
+                  end else if(exme_bias[1:0]==2'b01) begin
                     mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
-                  end else if(exme_alu_result_reg[1:0]==2'b10) begin
+                  end else if(exme_bias[1:0]==2'b10) begin
                     mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
                   end else begin
                     mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
@@ -720,13 +796,17 @@ module pipeline_master #(
                   mewb_rf_wdata_reg <= wb1_dat_i;
                 end
                 // mewb_rf_wdata_reg <= {24'b0,(wb1_dat_i>>exme_alu_result_reg[1:0])[7:0]};
-                mewb_rf_waddr_reg <= exme_rf_waddr_reg;
+                mewb_rf_waddr_reg <= exme_rf_waddr_reg_copy;
               end
             endcase
           end else begin
             wb1_cyc_o <= 1'b1;
             wb1_stb_o <= 1'b1;
             wb1_adr_o <= exme_alu_result_reg;
+            exme_state <= 1'b1;
+            exme_bias <= exme_alu_result_reg[1:0];
+            exme_inst_reg_copy <= exme_inst_reg;
+            exme_rf_waddr_reg_copy <= exme_rf_waddr_reg;
             case(exme_inst_reg[6:0])
               LB_LW: begin
                 wb1_we_o <= 1'b0;
