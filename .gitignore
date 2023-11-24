@@ -9,3 +9,5 @@ thinpad_top.sim/
 /.lint/
 /.Xil
 /.Xilinx
+thinpad_top.srcs/sources_1/ip/
+thinpad_top.xpr

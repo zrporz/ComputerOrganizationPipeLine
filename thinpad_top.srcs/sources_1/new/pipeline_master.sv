@@ -35,13 +35,15 @@ module pipeline_master #(
     U_TYPE = 3'b101, 
     J_TYPE = 3'b110
   } instrction_type_t;
+
+  // NOTE
   typedef enum logic [6:0] {
     LUI = 7'b0110111,
     BEQ_BNE = 7'b1100011,
     LB_LW = 7'b0000011,
     SB_SW = 7'b0100011, // SB or SW
-    ADDI_ANDI_ORI_SLLI_SRLI = 7'b0010011, // ADDI or ANDI
-    ADD_OR_AND_XOR = 7'b0110011,
+    ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ = 7'b0010011, // ADDI or ANDI, CLZ, CTZ
+    ADD_OR_AND_XOR_MINU = 7'b0110011, // 这里之后增加 MINU
     JAL = 7'b1101111,
     JALR = 7'b1100111,
     AUIPC = 7'b0010111
@@ -57,7 +59,10 @@ module pipeline_master #(
     ALU_SLL = 4'b0111,
     ALU_SRL = 4'b1000,
     ALU_SRA = 4'b1001,
-    ALU_ROL = 4'b1010
+    ALU_ROL = 4'b1010,
+    ALU_CLZ = 4'b1011,
+    ALU_CTZ = 4'b1100,
+    ALU_MINU = 4'b1101
   } op_type_t;
 
   // before IF reg
@@ -135,6 +140,7 @@ module pipeline_master #(
   //=========== REGFILE MODULE END ===========
   
   //=========== DECODER MODULE BEGIN ===========
+  // NOTE
   instrction_type_t imm_gen_type_o;
   logic [31:0] imm_gen_inst_o;
   logic [4:0] rd;
@@ -186,7 +192,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADDI_ANDI_ORI_SLLI_SRLI:begin
+      ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ:begin
         use_rs2 = 0;
         imm_gen_type_o = I_TYPE;
         imm_gen_inst_o[11:0] = ifid_inst_reg[31:20];
@@ -196,7 +202,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADD_OR_AND_XOR:begin
+      ADD_OR_AND_XOR_MINU:begin
         use_rs2 = 1;
         imm_gen_type_o = R_TYPE;
         imm_gen_inst_o = 0;
@@ -392,6 +398,7 @@ module pipeline_master #(
     .result(alu_result_i)
   );
   always_comb begin
+    // NOTE
     alu_operand1_o = 0;
     alu_operand2_o = 0;
     alu_op_o = ALU_DEFAULT;
@@ -586,11 +593,13 @@ module pipeline_master #(
         idex_pc_now_reg <= ifid_pc_now_reg;
         idex_use_rs2 <= use_rs2;
         idex_instr_type_reg <= imm_gen_type_o;
+
+        // NOTE
         case(ifid_inst_reg[6:0])
           LUI:begin // do nothing
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;
-            idex_rf_wen <= 1;
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请求, 一级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存器
           end
           BEQ_BNE:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
@@ -608,23 +617,43 @@ module pipeline_master #(
             idex_mem_en <= 1;
             idex_rf_wen <= 0;
           end
-          ADDI_ANDI_ORI_SLLI_SRLI:begin // rs1+imm
+          ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ:begin // rs1+imm
             idex_rf_wen <= 1;
             idex_mem_en <= 0;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
               3'b111:idex_alu_op_reg <= ALU_AND;
               3'b110:idex_alu_op_reg <= ALU_OR;
-              3'b001:idex_alu_op_reg <= ALU_SLL;
+              // 3'b001:idex_alu_op_reg <= ALU_SLL;
               3'b101:idex_alu_op_reg <= ALU_SRL;
+              3'b001:
+                if (ifid_inst_reg[31:25] == 7'b0000000) begin
+                  idex_alu_op_reg <= ALU_SLL;
+                end else if (ifid_inst_reg[31:25] == 7'b0110000) begin
+                  // 分为 CTZ, CLZ 两种情况
+                  if (ifid_inst_reg[24:20] == 5'b00000) begin
+                    idex_alu_op_reg <= ALU_CLZ;
+                  end else if (ifid_inst_reg[24:20] == 5'b00001) begin
+                    idex_alu_op_reg <= ALU_CTZ;
+                  end
+                end
             endcase
           end
-          ADD_OR_AND_XOR:begin // rs1+rs2
+          ADD_OR_AND_XOR_MINU:begin // rs1+rs2
             idex_rf_wen <= 1;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
               3'b111:idex_alu_op_reg <= ALU_AND;
-              3'b110:idex_alu_op_reg <= ALU_OR;
+              3'b110:begin
+                if (ifid_inst_reg[31:25] == 7'b0000000) begin
+                  // or
+                  idex_alu_op_reg <= ALU_OR;
+                end else if (ifid_inst_reg[31:25] == 7'b0000101) begin
+                  // minu
+                  idex_alu_op_reg <= ALU_MINU;
+                end
+              end
+
               3'b100:idex_alu_op_reg <= ALU_XOR;
             endcase
             idex_mem_en <= 0;
@@ -694,6 +723,8 @@ module pipeline_master #(
         exme_use_rs2 <= idex_use_rs2;
         exme_instr_type_reg <= idex_instr_type_reg;
         exme_pc_now_reg <= idex_pc_now_reg;
+
+        // NOTE
         case(idex_instr_type_reg)
           U_TYPE: begin
           // don't need to do anything
@@ -807,6 +838,8 @@ module pipeline_master #(
             exme_bias <= exme_alu_result_reg[1:0];
             exme_inst_reg_copy <= exme_inst_reg;
             exme_rf_waddr_reg_copy <= exme_rf_waddr_reg;
+
+            // NOTE
             case(exme_inst_reg[6:0])
               LB_LW: begin
                 wb1_we_o <= 1'b0;
