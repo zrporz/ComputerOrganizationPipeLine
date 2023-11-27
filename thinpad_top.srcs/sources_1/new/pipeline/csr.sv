@@ -13,7 +13,9 @@ module Csr#(
     output reg [1:0] priviledge_mode_o,
     output reg [ADDR_WIDTH-1:0] pc_next_o,
     // mtimer -> cpu -> csr
-    input wire mtime_exceed_i
+    input wire mtime_exceed_i,
+    // mmu -> cpu -> csr
+    output wire [ADDR_WIDTH-1:0] satp_o
 );
     parameter  CSRRC= 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS= 32'b????_????_????_????_?010_????_?111_0011;
@@ -28,7 +30,8 @@ module Csr#(
         MSCRATCH= 12'h340,
         MEPC= 12'h341,
         MCAUSE= 12'h342,
-        MIP= 12'h344
+        MIP= 12'h344,
+        SATP= 12'h180
     } csr_reg_t;
 
     mtvec_t mtvec;
@@ -38,6 +41,8 @@ module Csr#(
     mstatus_t mstatus;
     mie_t mie;
     mip_t mip;
+    satp_t satp;
+    assign satp_o = satp;
     // always_comb begin
     //   if(mip.mtip && mie.mtie)begin // time interrupt exist and machine mode enable all interrupt
         
@@ -68,6 +73,9 @@ module Csr#(
             end
             MEPC:begin
               rf_wdata_o = mepc;
+            end
+            SATP:begin
+              rf_wdata_o = satp;
             end            
           endcase
         end
@@ -120,7 +128,10 @@ module Csr#(
                   end
                   MEPC:begin
                     mepc <= mepc & ~rf_rdata_a_i;
-                  end            
+                  end 
+                  SATP:begin
+                    satp <= satp & ~rf_rdata_a_i;
+                  end           
                 endcase
               end
             end
@@ -148,7 +159,10 @@ module Csr#(
                   end
                   MEPC:begin
                     mepc <= mepc | rf_rdata_a_i;
-                  end            
+                  end
+                  SATP:begin
+                    satp <= satp | rf_rdata_a_i;
+                  end                
                 endcase
               end
             end
@@ -177,6 +191,9 @@ module Csr#(
                   MEPC:begin
                     mepc <= rf_rdata_a_i ;
                   end
+                  SATP:begin
+                    satp <= rf_rdata_a_i;
+                  end           
                 endcase
               end
             end

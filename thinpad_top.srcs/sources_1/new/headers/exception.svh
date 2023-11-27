@@ -45,4 +45,10 @@ typedef struct packed {
     logic[`MXLEN-13:0] trash_0;
     logic meip, trash_1, seip, ueip, mtip, trash_2, stip, utip, msip, trash_3, ssip, usip;
 } mip_t;
+`define CSR_SATP_ADDR `CSR_ADDR_WIDTH'h180
+typedef struct packed {
+    logic mode;
+    logic [8:0] asid;
+    logic [21:0] ppn;
+} satp_t;
 `endif

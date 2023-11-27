@@ -26,7 +26,10 @@ module pipeline_master #(
     output reg wb1_we_o,
     input wire mtime_exceed_i,
     input wire [31:0] dip_sw,
-    output wire [15:0] leds
+    output wire [15:0] leds,
+    // mmu<-cpu<-csr
+    output wire [31:0] satp_o,
+    output wire [1:0] priviledge_mode_o
 );
 
   typedef enum logic [2:0] { 
@@ -70,6 +73,7 @@ module pipeline_master #(
     ALU_LTU = 4'b1110
   } op_type_t;
   priviledge_mode_t priviledge_mode;
+  assign priviledge_mode_o = priviledge_mode;
   // before IF reg
   /*=========== PC Controller Module Begin ===========*/
   reg [31:0] pc_reg;
@@ -485,7 +489,8 @@ module pipeline_master #(
     .priviledge_mode_i(priviledge_mode),
     .pc_now_i(exme_pc_now_reg),
     .pc_next_o(pc_csr_nxt),
-    .mtime_exceed_i(mtime_exceed_i)
+    .mtime_exceed_i(mtime_exceed_i),
+    .satp_o(satp_o)
   );
   /*=========== CSR MODULE END ===========*/
   always_ff @ (posedge clk_i) begin

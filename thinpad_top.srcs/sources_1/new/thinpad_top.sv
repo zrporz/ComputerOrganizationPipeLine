@@ -1,5 +1,5 @@
 `default_nettype none
-
+`include "./headers/exception.svh"
 module thinpad_top (
     input wire clk_50M,     // 50MHz 时钟输入
     input wire clk_11M0592, // 11.0592MHz 时钟输入（备用，可不用）
@@ -243,6 +243,8 @@ module thinpad_top (
   logic [31:0] wbm1_dat_i;
   logic [ 3:0] wbm1_sel_o;
   logic        wbm1_we_o;
+  satp_t satp_o;
+  priviledge_mode_t priviledge_mode_o;
   pipeline_master lab6_master(
       .clk_i(sys_clk),
       .rst_i(sys_rst),
@@ -266,6 +268,9 @@ module thinpad_top (
       .wb1_we_o (wbm1_we_o),
       // mtimer->cpu
       .mtime_exceed_i(mtime_exceed_o),
+      // mmu<-cpu<-csr
+      .satp_o(satp_o),
+      .priviledge_mode_o(priviledge_mode_o),
       // DEBUG
       .dip_sw(dip_sw),
       .leds(leds)
