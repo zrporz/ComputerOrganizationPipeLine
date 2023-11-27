@@ -29,7 +29,7 @@ module pipeline_master #(
     output wire [15:0] leds,
     // mmu<-cpu<-csr
     output wire [31:0] satp_o,
-    output wire [1:0] priviledge_mode_o
+    output wire[1:0]  priviledge_mode_o
 );
 
   typedef enum logic [2:0] { 

@@ -64,7 +64,7 @@ module MtimeController #(
             wb_ack_o <= 1;
             state <= 1;
           end else if(mtimecmp_reg)begin
-            mtime_reg <= mtime_reg + 64'b1;
+            mtime_reg <= mtime_reg + 64'h1;
             mtime_exceed_o <= (mtime_reg >= mtimecmp_reg);
           end
         end else begin

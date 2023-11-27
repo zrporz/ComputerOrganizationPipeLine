@@ -20,7 +20,7 @@ module Csr#(
     parameter  CSRRC= 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS= 32'b????_????_????_????_?010_????_?111_0011;
     parameter  CSRRW= 32'b????_????_????_????_?001_????_?111_0011;
-    parameter  EBREAK= 32'b0000_0000_0000_0001_0000_0000_0111_0011;
+    parameter  EBREAK= 32'b0000_0000_0001_0000_0000_0000_0111_0011;
     parameter  ECALL= 32'b0000_0000_0000_0000_0000_0000_0111_0011;
     parameter  MRET= 32'b0011_0000_0010_0000_0000_0000_0111_0011;
     typedef enum logic [11:0]{
@@ -82,6 +82,15 @@ module Csr#(
           
       endcase
     end
+    // always_comb begin
+    //   if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin
+    //     mcause.exception_code = 31'h4;
+    //     priviledge_mode_o = PRIVILEDGE_MODE_M;
+    //   end else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
+    //     mcause.exception_code = 31'h7;
+    //     priviledge_mode_o = PRIVILEDGE_MODE_U;
+    //   end
+    // end
     always_ff @ (posedge clk_i) begin
       if (rst_i) begin
         mtvec <= 32'b0;
@@ -91,17 +100,19 @@ module Csr#(
         mstatus <= 32'b0;
         mie <= 32'b0;
         mip <= 32'b0;
+        satp <= 32'b0;
       end else begin
-        if(mtime_exceed_i && mie.mtie )begin // time interrupt exist and machine mode enable all interrupt
-          mip.mtip <= 1'b1;
-          mcause.interrupt = 1'b1;
+        if(mtime_exceed_i && mie.mtie && mip.mtip)begin // time interrupt exist and machine mode enable all interrupt
+          // mip.mtip <= 1'b1;
+          mcause.interrupt <= 1'b1;
           if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin
             mcause.exception_code = 31'h4;
             priviledge_mode_o = PRIVILEDGE_MODE_M;
-          end else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
-            mcause.exception_code = 31'h7;
-            priviledge_mode_o = PRIVILEDGE_MODE_U;
-          end
+          end 
+          // else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
+          //   mcause.exception_code = 31'h7;
+          //   priviledge_mode_o = PRIVILEDGE_MODE_U;
+          // end
         end else begin
           casez(inst_i)
             CSRRC:begin
