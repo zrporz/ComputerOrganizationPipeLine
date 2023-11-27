@@ -1,4 +1,7 @@
-module hazard_controler(
+module hazard_controler#(
+    parameter ADDR_WIDTH = 32,
+    parameter DATA_WIDTH = 32
+) (
     input wire wb1_cyc_i,
     input wire wb1_ack_i,
     input wire wb0_cyc_i,
@@ -12,7 +15,8 @@ module hazard_controler(
     input wire exme_rf_wen_i,
     input wire mewb_rf_wen_i,
     input wire use_rs2_i,
-    input wire mewb_rpc_wen_i,
+    input wire [ADDR_WIDTH-1:0] pc_branch_nxt_i,
+    input wire [ADDR_WIDTH-1:0] pc_csr_nxt_i,
     output reg bubble_IF_o,
     output reg bubble_ID_o,
     output reg bubble_EXE_o,
@@ -35,11 +39,13 @@ module hazard_controler(
       flush_EXE_o = 0;
       flush_MEM_o = 0;
       flush_WB_o = 0;
-      if(mewb_rpc_wen_i)begin // Because WB is rewrite the PC registor, pipeline should be flushed
+      if(pc_csr_nxt_i)begin // Because MEM is rewrite the PC registor, pipeline should be flushed
         flush_IF_o = 1;
         flush_ID_o = 1;
         flush_EXE_o = 1;
-        flush_MEM_o = 1;
+      end else if(pc_branch_nxt_i)begin // Because EXE is rewrite the PC registor, pipeline should be flushed
+        flush_IF_o = 1;
+        flush_ID_o = 1;
       end else begin
         if(wb1_cyc_i && !wb1_ack_i)begin // MEM is writing/reading and it hasn't complete yet
           bubble_IF_o = 1;

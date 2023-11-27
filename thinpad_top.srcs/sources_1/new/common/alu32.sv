@@ -106,6 +106,8 @@ always @(*) begin
                 result = b;
             end
         end
+        // LTU
+        4'b1110: result = (a < b);
         default: result = 8'b0; // 其他操作码，输出默认值为 0
     endcase
 end

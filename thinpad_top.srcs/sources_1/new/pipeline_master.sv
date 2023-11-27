@@ -1,3 +1,4 @@
+`include "./headers/exception.svh"
 module pipeline_master #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32
@@ -23,6 +24,7 @@ module pipeline_master #(
     input wire [DATA_WIDTH-1:0] wb1_dat_i,
     output reg [DATA_WIDTH/8-1:0] wb1_sel_o,
     output reg wb1_we_o,
+    input wire mtime_exceed_i,
     input wire [31:0] dip_sw,
     output wire [15:0] leds
 );
@@ -33,7 +35,8 @@ module pipeline_master #(
     S_TYPE = 3'b011, 
     B_TYPE = 3'b100, 
     U_TYPE = 3'b101, 
-    J_TYPE = 3'b110
+    J_TYPE = 3'b110,
+    SYS_TYPE = 3'b111
   } instrction_type_t;
 
   // NOTE
@@ -43,10 +46,11 @@ module pipeline_master #(
     LB_LW = 7'b0000011,
     SB_SW = 7'b0100011, // SB or SW
     ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ = 7'b0010011, // ADDI or ANDI, CLZ, CTZ
-    ADD_OR_AND_XOR_MINU = 7'b0110011, // 这里之后增加 MINU
+    ADD_OR_AND_XOR_MINU_SLTU = 7'b0110011, // 这里之后增加 MINU,SLTU
     JAL = 7'b1101111,
     JALR = 7'b1100111,
-    AUIPC = 7'b0010111
+    AUIPC = 7'b0010111,
+    CSR_EBREAK_ECALL_MRET = 7'b1110011 // CSR(C,S,W),EBREAK, ECALL, MRET
   } opcode_type_t;
   typedef enum logic [3:0] {
     ALU_DEFAULT = 4'b0000,
@@ -62,12 +66,26 @@ module pipeline_master #(
     ALU_ROL = 4'b1010,
     ALU_CLZ = 4'b1011,
     ALU_CTZ = 4'b1100,
-    ALU_MINU = 4'b1101
+    ALU_MINU = 4'b1101,
+    ALU_LTU = 4'b1110
   } op_type_t;
-
+  priviledge_mode_t priviledge_mode;
   // before IF reg
+  /*=========== PC Controller Module Begin ===========*/
   reg [31:0] pc_reg;
-//   reg [31:0] pc_now_reg;
+  reg [31:0] pc_seq_nxt;
+  reg [31:0] pc_branch_nxt;
+  reg [31:0] pc_csr_nxt;
+  reg [31:0] pc_nxt_reg;
+  logic pc_if_state; //0:IDLE 1:Fetching Instruction
+  PcController u_pc_controller(
+    .pc_i(pc_reg),
+    .pc_seq_nxt_i(pc_seq_nxt),
+    .pc_branch_nxt_i(pc_branch_nxt),
+    .pc_csr_nxt_i(pc_csr_nxt),
+    .pc_nxt_o(pc_nxt_reg)
+  );
+  /*=========== PC Controller Module End ===========*/
 
   // IF-ID reg
   reg [31:0] ifid_inst_reg;
@@ -93,7 +111,7 @@ module pipeline_master #(
   reg [31:0] exme_rf_rdata_b_reg;
   reg [4:0] exme_rf_waddr_reg;
   reg [31:0] exme_alu_result_reg;
-  reg exme_rpc_wen;
+  // reg exme_rpc_wen;
   reg exme_mem_en;
   reg exme_use_rs2;
   reg[31:0] exme_pc_now_reg;
@@ -108,9 +126,12 @@ module pipeline_master #(
   reg mewb_rf_wen;
   reg [4:0] mewb_rf_waddr_reg;
   reg [31:0] mewb_rf_wdata_reg;
-  reg [31:0] mewb_rpc_wdata_reg;
-  reg mewb_rpc_wen;
+  // reg [31:0] mewb_rpc_wdata_reg;
+  // reg mewb_rpc_wen;
   instrction_type_t mewb_instr_type_reg;
+  
+  
+
 
   //=========== REGFILE MODULE BEGIN ===========
   reg [31:0] rf_writeback_reg; // 写回寄存器的
@@ -202,7 +223,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADD_OR_AND_XOR_MINU:begin
+      ADD_OR_AND_XOR_MINU_SLTU:begin
         use_rs2 = 1;
         imm_gen_type_o = R_TYPE;
         imm_gen_inst_o = 0;
@@ -232,6 +253,11 @@ module pipeline_master #(
         imm_gen_type_o = U_TYPE;
         imm_gen_inst_o = {ifid_inst_reg[31:12],12'b0};
       end
+      CSR_EBREAK_ECALL_MRET:begin
+        use_rs2 = 0;
+        imm_gen_type_o = SYS_TYPE;
+        imm_gen_inst_o = 32'b0;
+      end
     endcase
   end
   //=========== DECODER MODULE END ===========
@@ -260,7 +286,8 @@ module pipeline_master #(
     .idex_rf_wen_i(idex_rf_wen),
     .exme_rf_wen_i(exme_rf_wen),
     .mewb_rf_wen_i(mewb_rf_wen),
-    .mewb_rpc_wen_i(mewb_rpc_wen),
+    .pc_branch_nxt_i(pc_branch_nxt),
+    .pc_csr_nxt_i(pc_csr_nxt),
     .use_rs2_i(use_rs2),
     .bubble_IF_o(bubble_IF),
     .bubble_ID_o(bubble_ID),
@@ -360,7 +387,8 @@ module pipeline_master #(
     .probe37(exme_rf_rdata_b_reg),
     .probe38(exme_rf_waddr_reg),
     .probe39(exme_alu_result_reg),
-    .probe40(exme_rpc_wen),
+    .probe40(0),
+    // .probe40(exme_rpc_wen),
     .probe41(exme_mem_en),
     .probe42(exme_use_rs2),
     .probe43(exme_pc_now_reg),
@@ -368,8 +396,10 @@ module pipeline_master #(
     .probe45(exme_rf_wen),
     .probe46(mewb_rf_waddr_reg),
     .probe47(mewb_rf_wdata_reg),
-    .probe48(mewb_rpc_wdata_reg),
-    .probe49(mewb_rpc_wen),
+    .probe48(0),
+    // .probe48(mewb_rpc_wdata_reg),
+    // .probe49(mewb_rpc_wen),
+    .probe49(0),
     .probe50(mewb_instr_type_reg),
     .probe51(flush_IF),
     .probe52(flush_ID),
@@ -443,13 +473,33 @@ module pipeline_master #(
     endcase
   end
   //=========== ALU MODULE END ===========
+  /*=========== CSR MODULE BEGIN ===========*/
+  /* CSR's read/write is carried out in MEM */
+  wire[31:0] rf_wdata_csr;
+  Csr u_csr(
+    .clk_i(clk_i),
+    .rst_i(rst_i),
+    .inst_i(exme_inst_reg),
+    .rf_rdata_a_i(exme_rf_rdata_a_reg),
+    .rf_wdata_o(rf_wdata_csr),
+    .priviledge_mode_i(priviledge_mode),
+    .pc_now_i(exme_pc_now_reg),
+    .pc_next_o(pc_csr_nxt),
+    .mtime_exceed_i(mtime_exceed_i)
+  );
+  /*=========== CSR MODULE END ===========*/
   always_ff @ (posedge clk_i) begin
     if (rst_i) begin
+      //reset PRIVILEDGE_MODE to USER TYPE
+      pc_if_state <= 0;
+      priviledge_mode <= PRIVILEDGE_MODE_U;
+
       wb1_stb_o <= 1'b0;
       wb1_cyc_o <= 1'b0;
       wb1_we_o <= 1'b0;
       wb1_sel_o <= 4'b0000;
       wb0_dat_o <= 32'b0;
+      wb0_adr_o <= 32'h8000_0000;
       wb1_dat_o <= 32'b0;
       wb1_adr_o <= 32'b0;
       // reset every reg stage to addi x0, x0, 0
@@ -489,7 +539,7 @@ module pipeline_master #(
       exme_mem_en <= 0;
       exme_instr_type_reg <= I_TYPE;
       exme_rf_wen <= 1; // Same to above
-      exme_rpc_wen <= 0;
+      // exme_rpc_wen <= 0;
       exme_pc_now_reg <= 32'h8000_0000;
       exme_state <= 0;
       exme_bias <= 0;
@@ -500,9 +550,9 @@ module pipeline_master #(
       mewb_rf_wen <= 1;
       mewb_rf_waddr_reg <= 5'b0;
       mewb_rf_wdata_reg <= 32'b0;
-      mewb_rpc_wdata_reg <= 32'b0;
+      // mewb_rpc_wdata_reg <= 32'b0;
       mewb_instr_type_reg <= I_TYPE;
-      mewb_rpc_wen <= 0;
+      // mewb_rpc_wen <= 0;
 
     // reset signal to none
     end else begin
@@ -510,6 +560,9 @@ module pipeline_master #(
       if(flush_IF)begin
         if(flush_ID)begin
           // IF-ID reset to addi x0, x0, 0
+          pc_if_state <=1;
+          wb0_adr_o <= pc_nxt_reg;
+          pc_reg <= pc_nxt_reg;
           ifid_inst_reg <= 32'b0010011;
           ifid_pc_now_reg <= 32'h8000_0000;
           ifid_instr_type_reg <= I_TYPE;
@@ -519,7 +572,7 @@ module pipeline_master #(
           wb0_sel_o <= 4'b0000;
         end
       end else if (bubble_IF) begin
-        wb0_adr_o <= pc_reg;
+        // wb0_adr_o <= pc_nxt_reg;
         // if(!bubble_ID)begin
           // IF-ID reset to addi x0, x0, 0
         ifid_inst_reg <= 32'b0010011;
@@ -534,23 +587,34 @@ module pipeline_master #(
         end
         // end
       end else begin
-        wb0_dat_o <= 32'b10;
-        wb0_adr_o <= pc_reg;
-        if (wb0_ack_i) begin
-          pc_reg <= pc_reg+4; 
-          wb0_stb_o <= 1'b0;
-          wb0_cyc_o <= 1'b0;
-          wb0_we_o <= 1'b0;
-          wb0_sel_o <= 4'b0000;
-          ifid_inst_reg <= wb0_dat_i;
-          ifid_pc_now_reg <= pc_reg;
-          ifid_instr_type_reg <= imm_gen_type_o;
-        end else begin
+        wb0_dat_o <= 32'b0;
+        if(!pc_if_state)begin // IDLE
+          wb0_adr_o <= pc_nxt_reg;
+          pc_reg <= pc_nxt_reg;
+          pc_if_state<=1;
           ifid_inst_reg <= 32'b0010011;
           wb0_stb_o <= 1'b1;
           wb0_cyc_o <= 1'b1;
           wb0_we_o <= 1'b0;
           wb0_sel_o <= 4'b1111;
+        end else begin // Fetching Instruction
+          if (wb0_ack_i) begin
+            pc_if_state <= 0;
+            pc_seq_nxt <= pc_reg+4;
+            wb0_stb_o <= 1'b0;
+            wb0_cyc_o <= 1'b0;
+            wb0_we_o <= 1'b0;
+            wb0_sel_o <= 4'b0000;
+            ifid_inst_reg <= wb0_dat_i;
+            ifid_pc_now_reg <= pc_reg;
+            ifid_instr_type_reg <= imm_gen_type_o;
+          end else begin
+            ifid_inst_reg <= 32'b0010011;
+            wb0_stb_o <= 1'b1;
+            wb0_cyc_o <= 1'b1;
+            wb0_we_o <= 1'b0;
+            wb0_sel_o <= 4'b1111;
+          end
         end
       end
       // ID
@@ -598,8 +662,8 @@ module pipeline_master #(
         case(ifid_inst_reg[6:0])
           LUI:begin // do nothing
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请求, 一级一级传下去
-            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存器
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�???, �???级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�???
           end
           BEQ_BNE:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
@@ -639,10 +703,11 @@ module pipeline_master #(
                 end
             endcase
           end
-          ADD_OR_AND_XOR_MINU:begin // rs1+rs2
+          ADD_OR_AND_XOR_MINU_SLTU:begin // rs1+rs2
             idex_rf_wen <= 1;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
+              3'b011:idex_alu_op_reg <= ALU_LTU; // SLTU
               3'b111:idex_alu_op_reg <= ALU_AND;
               3'b110:begin
                 if (ifid_inst_reg[31:25] == 7'b0000000) begin
@@ -673,6 +738,16 @@ module pipeline_master #(
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
           end
+          CSR_EBREAK_ECALL_MRET:begin
+            if(ifid_inst_reg[14:12]!=3'b000)begin // CSR(c,s,w)
+              idex_rf_wen <= 1;
+            end
+            else begin //EBREAK,ECALL,MRET
+              idex_rf_wen <= 0;
+            end
+            idex_alu_op_reg <= ALU_ADD;
+            idex_mem_en <= 0;
+          end
           default:begin
             idex_rf_wen <= 0;
             idex_alu_op_reg <= ALU_DEFAULT;
@@ -693,7 +768,7 @@ module pipeline_master #(
           exme_mem_en <= 0;
           exme_instr_type_reg <= I_TYPE;
           exme_rf_wen <= 1; // Same to above
-          exme_rpc_wen <= 0;
+          // exme_rpc_wen <= 0;
           exme_pc_now_reg <= 32'b0;
           
         end
@@ -709,7 +784,7 @@ module pipeline_master #(
           exme_mem_en <= 0;
           exme_instr_type_reg <= I_TYPE;
           exme_rf_wen <= 1; // Same to above
-          exme_rpc_wen <= 0;
+          // exme_rpc_wen <= 0;
           exme_pc_now_reg <= 32'b0;
         end
       end else begin
@@ -734,43 +809,51 @@ module pipeline_master #(
               exme_alu_result_reg <= idex_imm_gen_reg;
             end
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt <= 32'b0;
           end
           R_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
             if(idex_inst_reg[6:0] == JALR)begin
-              exme_rpc_wen <= 1;
+              // exme_rpc_wen <= 1;
+              pc_branch_nxt <= alu_result_i;
             end
             else begin
-              exme_rpc_wen <= 0;
+              pc_branch_nxt <= 32'b0;
             end
           end
           I_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt <= 32'b0;
           end
           S_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt <= 32'b0;
           end
           B_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
             if((idex_inst_reg[12] && idex_rf_rdata_a_reg != idex_rf_rdata_b_reg ) || (!idex_inst_reg[12] && idex_rf_rdata_a_reg == idex_rf_rdata_b_reg ))begin
-              exme_rpc_wen <= 1;
+              // exme_rpc_wen <= 1;
+              pc_branch_nxt <= alu_result_i;
             end
             else begin
-              exme_rpc_wen <= 0;
+              pc_branch_nxt <= 32'b0;
+              // exme_rpc_wen <= 0;
             end
           end
           J_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            exme_rpc_wen <= 1;
+            // exme_rpc_wen <= 1;
+            pc_branch_nxt <= alu_result_i;
           end
           default:begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt <= 32'b0;
           end
         endcase
       end
@@ -781,10 +864,10 @@ module pipeline_master #(
         mewb_rf_wen <= 1;
         mewb_rf_waddr_reg <= 5'b0;
         mewb_rf_wdata_reg <= 32'b0;
-        mewb_rpc_wdata_reg <= 32'b0;
+        // mewb_rpc_wdata_reg <= 32'b0;
 
         mewb_instr_type_reg <= I_TYPE;
-        mewb_rpc_wen <= 0;
+        // mewb_rpc_wen <= 0;
 
         // end
       end else if(bubble_MEM)begin
@@ -793,98 +876,108 @@ module pipeline_master #(
           mewb_rf_wen <= 1;
           mewb_rf_waddr_reg <= 5'b0;
           mewb_rf_wdata_reg <= 32'b0;
-          mewb_rpc_wdata_reg <= 32'b0;
+          // mewb_rpc_wdata_reg <= 32'b0;
           mewb_instr_type_reg <= I_TYPE;
-          mewb_rpc_wen <= 0;
+          // mewb_rpc_wen <= 0;
 
         end
       end else begin
-        mewb_rf_wen <= exme_rf_wen;
-        mewb_instr_type_reg <= exme_instr_type_reg;
-        
-        if(exme_mem_en || exme_state)begin // need to visit the memory include LB,LW,SB,SW
-          if(wb1_ack_i)begin
-            wb1_cyc_o <= 1'b0;
-            wb1_stb_o <= 1'b0;
-            wb1_sel_o <= 4'b0000;
-            wb1_we_o <= 1'b0;
-            exme_state <= 1'b0;
-            exme_inst_reg_copy <= exme_inst_reg;
-            exme_bias <= 2'b0;
-            case(exme_inst_reg_copy[6:0])
-              LB_LW: begin
-                if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
-                  if(exme_bias[1:0]==2'b0) begin
-                    mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
-                  end else if(exme_bias[1:0]==2'b01) begin
-                    mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
-                  end else if(exme_bias[1:0]==2'b10) begin
-                    mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
-                  end else begin
-                    mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
-                  end
-                end else begin //LW
-                  mewb_rf_wdata_reg <= wb1_dat_i;
-                end
-                // mewb_rf_wdata_reg <= {24'b0,(wb1_dat_i>>exme_alu_result_reg[1:0])[7:0]};
-                mewb_rf_waddr_reg <= exme_rf_waddr_reg_copy;
-              end
-            endcase
-          end else begin
-            wb1_cyc_o <= 1'b1;
-            wb1_stb_o <= 1'b1;
-            wb1_adr_o <= exme_alu_result_reg;
-            exme_state <= 1'b1;
-            exme_bias <= exme_alu_result_reg[1:0];
-            exme_inst_reg_copy <= exme_inst_reg;
-            exme_rf_waddr_reg_copy <= exme_rf_waddr_reg;
-
-            // NOTE
-            case(exme_inst_reg[6:0])
-              LB_LW: begin
-                wb1_we_o <= 1'b0;
-                if(exme_inst_reg[14:12] == 3'b000)begin //LB
-                  wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
-                  // wb1_sel_o <= 4'b0001;
-                end else if(exme_inst_reg[14:12] == 3'b010) begin //LW
-                  wb1_sel_o <= 4'b1111;
-                end else begin
-                  wb1_sel_o <= 4'b0000;
-                end
-              end
-              SB_SW: begin
-                if(exme_inst_reg[14:12] == 3'b000)begin //SB
-                  wb1_dat_o <= exme_rf_rdata_b_reg;
-                  wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
-                  // wb1_sel_o <= 4'b0001;
-                  wb1_we_o <= 1'b1;
-                end else if(exme_inst_reg[14:12] == 3'b010)begin //SW
-                  wb1_dat_o <= exme_rf_rdata_b_reg;
-                  wb1_sel_o <= 4'b1111;
-                  wb1_we_o <= 1'b1;
-                end else begin
-                  wb1_dat_o <= 0;
-                  wb1_sel_o <= 4'b0000;
-                  wb1_we_o <= 1'b0;
-                end
-              end
-            endcase
-          end
-        end else begin
+        if(exme_instr_type_reg==SYS_TYPE)begin // SYS instruction should be done at here
+          // TODO SYS instruction should be done at here
+          mewb_rf_wen <= exme_rf_wen;
           mewb_rf_waddr_reg <= exme_rf_waddr_reg;
-          if(exme_rpc_wen)begin
-            mewb_rpc_wdata_reg <=  exme_alu_result_reg;
-            mewb_rf_wdata_reg <= exme_pc_now_reg + 4;
+          mewb_rf_wdata_reg <= rf_wdata_csr;
+          // mewb_rpc_wdata_reg <= 0;
+          // mewb_rpc_wen <= exme_rpc_wen;
+        end
+        else begin
+          mewb_rf_wen <= exme_rf_wen;
+          mewb_instr_type_reg <= exme_instr_type_reg;
+          
+          if(exme_mem_en || exme_state)begin // need to visit the memory include LB,LW,SB,SW
+            if(wb1_ack_i)begin
+              wb1_cyc_o <= 1'b0;
+              wb1_stb_o <= 1'b0;
+              wb1_sel_o <= 4'b0000;
+              wb1_we_o <= 1'b0;
+              exme_state <= 1'b0;
+              exme_inst_reg_copy <= exme_inst_reg;
+              exme_bias <= 2'b0;
+              case(exme_inst_reg_copy[6:0])
+                LB_LW: begin
+                  if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
+                    if(exme_bias[1:0]==2'b0) begin
+                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
+                    end else if(exme_bias[1:0]==2'b01) begin
+                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
+                    end else if(exme_bias[1:0]==2'b10) begin
+                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
+                    end else begin
+                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
+                    end
+                  end else begin //LW
+                    mewb_rf_wdata_reg <= wb1_dat_i;
+                  end
+                  // mewb_rf_wdata_reg <= {24'b0,(wb1_dat_i>>exme_alu_result_reg[1:0])[7:0]};
+                  mewb_rf_waddr_reg <= exme_rf_waddr_reg_copy;
+                end
+              endcase
+            end else begin
+              wb1_cyc_o <= 1'b1;
+              wb1_stb_o <= 1'b1;
+              wb1_adr_o <= exme_alu_result_reg;
+              exme_state <= 1'b1;
+              exme_bias <= exme_alu_result_reg[1:0];
+              exme_inst_reg_copy <= exme_inst_reg;
+              exme_rf_waddr_reg_copy <= exme_rf_waddr_reg;
+
+              // NOTE
+              case(exme_inst_reg[6:0])
+                LB_LW: begin
+                  wb1_we_o <= 1'b0;
+                  if(exme_inst_reg[14:12] == 3'b000)begin //LB
+                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
+                    // wb1_sel_o <= 4'b0001;
+                  end else if(exme_inst_reg[14:12] == 3'b010) begin //LW
+                    wb1_sel_o <= 4'b1111;
+                  end else begin
+                    wb1_sel_o <= 4'b0000;
+                  end
+                end
+                SB_SW: begin
+                  if(exme_inst_reg[14:12] == 3'b000)begin //SB
+                    wb1_dat_o <= exme_rf_rdata_b_reg;
+                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
+                    // wb1_sel_o <= 4'b0001;
+                    wb1_we_o <= 1'b1;
+                  end else if(exme_inst_reg[14:12] == 3'b010)begin //SW
+                    wb1_dat_o <= exme_rf_rdata_b_reg;
+                    wb1_sel_o <= 4'b1111;
+                    wb1_we_o <= 1'b1;
+                  end else begin
+                    wb1_dat_o <= 0;
+                    wb1_sel_o <= 4'b0000;
+                    wb1_we_o <= 1'b0;
+                  end
+                end
+              endcase
+            end
           end else begin
-            mewb_rf_wdata_reg <= exme_alu_result_reg;
+            mewb_rf_waddr_reg <= exme_rf_waddr_reg;
+            if(exme_inst_reg[6:0]==JAL)begin
+              // mewb_rpc_wdata_reg <=  exme_alu_result_reg;
+              mewb_rf_wdata_reg <= exme_pc_now_reg + 4;
+            end else begin
+              mewb_rf_wdata_reg <= exme_alu_result_reg;
+            end
+            // mewb_rpc_wen <= exme_rpc_wen;
           end
-          mewb_rpc_wen <= exme_rpc_wen;
         end
       end
       // WB
-      if(mewb_rpc_wen)begin
-        pc_reg <= mewb_rpc_wdata_reg;
-      end
+      // if(mewb_rpc_wen)begin
+      //   pc_reg <= mewb_rpc_wdata_reg;
+      // end
 
       // end
       end
