@@ -244,7 +244,7 @@ module thinpad_top (
   logic [ 3:0] wbm1_sel_o;
   logic        wbm1_we_o;
   satp_t satp_o;
-  wire[1:0] priviledge_mode_o;
+  logic [1:0] priviledge_mode_o;
   pipeline_master lab6_master(
       .clk_i(sys_clk),
       .rst_i(sys_rst),
