@@ -245,27 +245,48 @@ module thinpad_top (
   logic        wbm1_we_o;
   satp_t satp_o;
   logic [1:0] priviledge_mode_o;
+
+  // mmu_if 的信号
+  logic        mmu_if_cyc_o;
+  logic        mmu_if_stb_o;
+  logic        mmu_if_ack_i;
+  logic [31:0] mmu_if_adr_o;
+  logic [31:0] mmu_if_dat_o;
+  logic [31:0] mmu_if_dat_i;
+  logic [ 3:0] mmu_if_sel_o;
+  logic        mmu_if_we_o;
+
+  // mmu_mem 的信号
+  logic        mmu_mem_cyc_o;
+  logic        mmu_mem_stb_o;
+  logic        mmu_mem_ack_i;
+  logic [31:0] mmu_mem_adr_o;
+  logic [31:0] mmu_mem_dat_o;
+  logic [31:0] mmu_mem_dat_i;
+  logic [ 3:0] mmu_mem_sel_o;
+  logic        mmu_mem_we_o;
+
   pipeline_master lab6_master(
       .clk_i(sys_clk),
       .rst_i(sys_rst),
       // wishbone master0
-      .wb0_cyc_o(wbm0_cyc_o),
-      .wb0_stb_o(wbm0_stb_o),
-      .wb0_ack_i(wbm0_ack_i),
-      .wb0_adr_o(wbm0_adr_o),
-      .wb0_dat_o(wbm0_dat_o),
-      .wb0_dat_i(wbm0_dat_i),
-      .wb0_sel_o(wbm0_sel_o),
-      .wb0_we_o (wbm0_we_o),
+      .wb0_cyc_o(mmu_if_cyc_o),
+      .wb0_stb_o(mmu_if_stb_o),
+      .wb0_ack_i(mmu_if_ack_i),
+      .wb0_adr_o(mmu_if_adr_o),
+      .wb0_dat_o(mmu_if_dat_o),
+      .wb0_dat_i(mmu_if_dat_i),
+      .wb0_sel_o(mmu_if_sel_o),
+      .wb0_we_o (mmu_if_we_o),
       // wishbone master1
-      .wb1_cyc_o(wbm1_cyc_o),
-      .wb1_stb_o(wbm1_stb_o),
-      .wb1_ack_i(wbm1_ack_i),
-      .wb1_adr_o(wbm1_adr_o),
-      .wb1_dat_o(wbm1_dat_o),
-      .wb1_dat_i(wbm1_dat_i),
-      .wb1_sel_o(wbm1_sel_o),
-      .wb1_we_o (wbm1_we_o),
+      .wb1_cyc_o(mmu_mem_cyc_o),
+      .wb1_stb_o(mmu_mem_stb_o),
+      .wb1_ack_i(mmu_mem_ack_i),
+      .wb1_adr_o(mmu_mem_adr_o),
+      .wb1_dat_o(mmu_mem_dat_o),
+      .wb1_dat_i(mmu_mem_dat_i),
+      .wb1_sel_o(mmu_mem_sel_o),
+      .wb1_we_o (mmu_mem_we_o),
       // mtimer->cpu
       .mtime_exceed_i(mtime_exceed_o),
       // mmu<-cpu<-csr
@@ -275,6 +296,69 @@ module thinpad_top (
       .dip_sw(dip_sw),
       .leds(leds)
   );
+  
+  /* =========== MMU begin ===================*/
+  mmu u_mmu_if(
+    .clk(sys_clk),
+    .rst(sys_rst),
+
+    // 输入
+    .master_addr_in(mmu_if_adr_o),
+    .master_data_in(mmu_if_dat_o),
+    .master_data_out(mmu_if_dat_i),
+    .master_we_in(mmu_if_we_o),
+    .master_sel_in(mmu_if_sel_o),
+    .master_stb_in(mmu_if_stb_o),
+    .master_cyc_in(mmu_if_cyc_o),
+    .master_ack_out(mmu_if_ack_i),
+
+    // mux
+    .mux_addr_out(wbm0_adr_o),
+    .mux_data_out(wbm0_dat_o),
+    .mux_data_in(wbm0_dat_i),
+    .mux_we_out(wbm0_we_o),
+    .mux_sel_out(wbm0_sel_o),
+    .mux_stb_out(wbm0_stb_o),
+    .mux_cyc_out(wbm0_cyc_o),
+    .mux_ack_in(wbm0_ack_i),
+
+    // mode
+    .mode_in(priviledge_mode_o),
+    // satp
+    .satp_in(satp_o)
+  );
+
+    /* =========== MMU begin ===================*/
+  mmu u_mmu_mem(
+    .clk(sys_clk),
+    .rst(sys_rst),
+
+    // 输入
+    .master_addr_in(mmu_mem_adr_o),
+    .master_data_in(mmu_mem_dat_o),
+    .master_data_out(mmu_mem_dat_i),
+    .master_we_in(mmu_mem_we_o),
+    .master_sel_in(mmu_mem_sel_o),
+    .master_stb_in(mmu_mem_stb_o),
+    .master_cyc_in(mmu_mem_cyc_o),
+    .master_ack_out(mmu_mem_ack_i),
+
+    // mux
+    .mux_addr_out(wbm1_adr_o),
+    .mux_data_out(wbm1_dat_o),
+    .mux_data_in(wbm1_dat_i),
+    .mux_we_out(wbm1_we_o),
+    .mux_sel_out(wbm1_sel_o),
+    .mux_stb_out(wbm1_stb_o),
+    .mux_cyc_out(wbm1_cyc_o),
+    .mux_ack_in(wbm1_ack_i),
+
+    // mode
+    .mode_in(priviledge_mode_o),
+    // satp
+    .satp_in(satp_o)
+  );
+
   /* =========== Lab5 MUX begin =========== */
   // IF-Master
   // Wishbone MUX (Masters) => bus slaves
