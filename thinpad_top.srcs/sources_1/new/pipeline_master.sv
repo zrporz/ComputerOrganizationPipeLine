@@ -346,8 +346,8 @@ module pipeline_master #(
       // 32'h20000000: leds_r = flush_EXE;
       // 32'h40000000: leds_r = flush_MEM;
       // 32'h80000000: leds_r = flush_WB;
-    endcase
-  end
+  //   endcase
+  // end
   // ila_1 u_ila(
   //   .clk(clk_i),
   //   .probe0(clk_i),
