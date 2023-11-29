@@ -72,8 +72,6 @@ module pipeline_master #(
     ALU_MINU = 4'b1101,
     ALU_LTU = 4'b1110
   } op_type_t;
-  priviledge_mode_t priviledge_mode;
-  assign priviledge_mode_o = priviledge_mode;
   // before IF reg
   /*=========== PC Controller Module Begin ===========*/
   reg [31:0] pc_reg;
@@ -310,36 +308,37 @@ module pipeline_master #(
   //=========== Risk and Conflict Solver END===========
 
   //=========== DEBUG MODULE BEGIN ===========
-  logic[15:0] leds_r;
-  assign leds = leds_r;
-  always_comb begin 
-    leds_r = 16'h0000;
-    case(dip_sw)
-      32'h1: leds_r = {wb0_cyc_o,wb0_stb_o,wb0_ack_i,wb0_we_o,wb0_sel_o,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
+  // logic[15:0] leds_r;
+  // assign leds = leds_r;
+  // always_comb begin 
+  //   leds_r = 16'h0000;
+    // case(dip_sw)
+      // 32'h1: leds_r = {wb0_cyc_o,wb0_stb_o,wb0_ack_i,wb0_we_o,wb0_sel_o,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
       // 32'h2: leds_r = wb0_stb_o;
       // 32'h4: leds_r = wb0_ack_i;
-      32'h8: leds_r = wb0_adr_o[15:0];
-      32'h10: leds_r = wb0_adr_o[31:16];
-      32'h20: leds_r = wb0_dat_o[15:0];
-      32'h40: leds_r = wb0_dat_o[31:16];
-      32'h80: leds_r = wb0_dat_i[15:0];
-      32'h100: leds_r = wb0_dat_i[31:16];
+      // 32'h8: leds_r = wb0_adr_o[15:0];
+      // 32'h10: leds_r = wb0_adr_o[31:16];
+      // 32'h20: leds_r = wb0_dat_o[15:0];
+      // 32'h40: leds_r = wb0_dat_o[31:16];
+      // 32'h80: leds_r = wb0_dat_i[15:0];
+      // 32'h100: leds_r = wb0_dat_i[31:16];
+      // 32'h200: leds_r = {15'b0,mtime_exceed_i};
       // 32'h200: leds_r = wb0_sel_o;
       // 32'h400: leds_r = wb0_we_o;
       // 32'h800: leds_r = {8'b0,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
       // 32'h1000: leds_r = wb1_stb_o;
       // 32'h2000: leds_r = wb1_ack_i;
-      32'h4000: leds_r = wb1_adr_o[15:0];
-      32'h8000: leds_r = wb1_adr_o[31:16];
-      32'h10000: leds_r = wb1_dat_o[15:0];
-      32'h20000: leds_r = wb1_dat_o[31:16];
-      32'h40000: leds_r = wb1_dat_i[15:0];
-      32'h80000: leds_r = wb1_dat_i[31:16];
+      // 32'h4000: leds_r = wb1_adr_o[15:0];
+      // 32'h8000: leds_r = wb1_adr_o[31:16];
+      // 32'h10000: leds_r = wb1_dat_o[15:0];
+      // 32'h20000: leds_r = wb1_dat_o[31:16];
+      // 32'h40000: leds_r = wb1_dat_i[15:0];
+      // 32'h80000: leds_r = wb1_dat_i[31:16];
       // 32'h100000: leds_r = wb1_sel_o;
       // 32'h200000: leds_r = wb1_we_o;
-      32'h400000: leds_r = {11'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB};
-      32'h800000: leds_r = {11'b0,flush_IF,flush_ID,flush_EXE,flush_MEM,flush_WB};
-      32'h1000000: leds_r = {3'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
+      // 32'h400000: leds_r = {11'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB};
+      // 32'h800000: leds_r = {11'b0,flush_IF,flush_ID,flush_EXE,flush_MEM,flush_WB};
+      // 32'h1000000: leds_r = {3'b0,bubble_IF,bubble_ID,bubble_EXE,bubble_MEM,bubble_WB,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
       // 32'h2000000: leds_r = bubble_MEM;
       // 32'h4000000: leds_r = bubble_WB;
       // 32'h8000000: leds_r = flush_ID;
@@ -347,8 +346,8 @@ module pipeline_master #(
       // 32'h20000000: leds_r = flush_EXE;
       // 32'h40000000: leds_r = flush_MEM;
       // 32'h80000000: leds_r = flush_WB;
-    endcase
-  end
+    // endcase
+  // end
   ila_1 u_ila(
     .clk(clk_i),
     .probe0(clk_i),
@@ -486,18 +485,19 @@ module pipeline_master #(
     .inst_i(exme_inst_reg),
     .rf_rdata_a_i(exme_rf_rdata_a_reg),
     .rf_wdata_o(rf_wdata_csr),
-    .priviledge_mode_i(priviledge_mode),
+    .priviledge_mode_o(priviledge_mode_o),
     .pc_now_i(exme_pc_now_reg),
     .pc_next_o(pc_csr_nxt),
     .mtime_exceed_i(mtime_exceed_i),
-    .satp_o(satp_o)
+    .satp_o(satp_o),
+    .leds(leds),
+    .dip_sw_i(dip_sw)
   );
   /*=========== CSR MODULE END ===========*/
   always_ff @ (posedge clk_i) begin
     if (rst_i) begin
       //reset PRIVILEDGE_MODE to USER TYPE
       pc_if_state <= 0;
-      priviledge_mode <= PRIVILEDGE_MODE_U;
 
       wb1_stb_o <= 1'b0;
       wb1_cyc_o <= 1'b0;
@@ -667,8 +667,8 @@ module pipeline_master #(
         case(ifid_inst_reg[6:0])
           LUI:begin // do nothing
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�???, �???级一级传下去
-            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�???
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�????, �????级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�????
           end
           BEQ_BNE:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
