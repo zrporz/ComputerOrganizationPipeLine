@@ -68,12 +68,19 @@ always_comb begin
     satp_ppn = satp_in.ppn;
 
     device = DEVICE_UNKNOWN;
-    // TODO：根据地�?决定 device
+    // TODO：根据地址决定 device
+    // 不太确定这个东西是否是对的
     if ((32'h8000_0000 <= master_addr_in) && ( master_addr_in <= 32'h803FFFFF)) begin
         device = DEVICE_SRAM; // BaseRAM
     end else if ((32'h8000_4000 <= master_addr_in) && ( master_addr_in <= 32'h807FFFFF)) begin
         device = DEVICE_SRAM; // ExtRAM
     end
+
+    // if ((32'h7FC10000 <= master_addr_in) && ( master_addr_in <= 32'h7FFFF000)) begin
+    //     device = DEVICE_SRAM; // BaseRAM
+    // end else if ((32'h00000000 <= master_addr_in) && ( master_addr_in <= 32'h002FF000)) begin
+    //     device = DEVICE_SRAM; // ExtRAM
+    // end
 
     // 取出虚地�?
     vpn_1 = master_addr_in[31:22];
