@@ -7,7 +7,6 @@ module Csr#(
     input wire rst_i,
     input wire [ADDR_WIDTH-1:0]inst_i, // instruction
     input wire [DATA_WIDTH-1:0]rf_rdata_a_i, // rs1 data
-    input wire [1:0] priviledge_mode_i, // 00:User, 01:Supervisor, 10:Reserved, 11:Machine
     input wire [ADDR_WIDTH-1:0] pc_now_i,
     output reg [DATA_WIDTH-1:0]rf_wdata_o, // rd
     output reg [1:0] priviledge_mode_o,
@@ -15,7 +14,11 @@ module Csr#(
     // mtimer -> cpu -> csr
     input wire mtime_exceed_i,
     // mmu -> cpu -> csr
-    output wire [ADDR_WIDTH-1:0] satp_o
+    output wire [ADDR_WIDTH-1:0] satp_o,
+     
+    // debug
+    input wire [31:0] dip_sw_i,
+    output reg [31:0] leds
 );
     parameter  CSRRC= 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS= 32'b????_????_????_????_?010_????_?111_0011;
@@ -42,13 +45,42 @@ module Csr#(
     mie_t mie;
     mip_t mip;
     satp_t satp;
+    reg[1:0] priviledge_mode_reg; // 00:User, 01:Supervisor, 10:Reserved, 11:Machine
     assign satp_o = satp;
     // always_comb begin
     //   if(mip.mtip && mie.mtie)begin // time interrupt exist and machine mode enable all interrupt
         
     //   end 
     // end
+    logic[15:0] leds_r;
+    assign leds = leds_r;
+    always_comb begin 
+      leds_r = 16'h0000;
+      case(dip_sw_i)
+        32'h0000_0001: leds_r = {15'b0,clk_i};
+        32'h0000_0002: leds_r = mcause[15:0];
+        32'h0000_0003: leds_r = mcause[31:16];
+        32'h0000_0004: leds_r = mstatus[15:0];
+        32'h0000_0005: leds_r = mstatus[31:16];
+        32'h0000_0006: leds_r = mie[15:0];
+        32'h0000_0007: leds_r = mie[31:16];
+        32'h0000_0008: leds_r = mip[15:0];
+        32'h0000_0009: leds_r = mip[31:16];
+        32'h0000_000a: leds_r = mtvec[15:0];
+        32'h0000_000b: leds_r = mtvec[31:16];
+        32'h0000_000c: leds_r = {15'b0, mtime_exceed_i};
+        32'h0000_000d: leds_r = {14'b0, priviledge_mode_reg};
+        32'h0000_0010: leds_r = mepc[15:0];
+        32'h0000_0011: leds_r = mepc[31:16];
+        32'h0000_0012: leds_r = pc_now_i[15:0];
+        32'h0000_0013: leds_r = pc_now_i[31:16];
+        32'h0000_0014: leds_r = pc_next_o[15:0];
+        32'h0000_0015: leds_r = pc_next_o[31:16];
+      endcase
+
+    end
     always_comb begin
+      
       rf_wdata_o = 32'b0;
       casez(inst_i)
         CSRRC,CSRRS,CSRRW: begin
@@ -82,6 +114,9 @@ module Csr#(
           
       endcase
     end
+    always_comb begin
+      priviledge_mode_o = priviledge_mode_reg;
+    end
     // always_comb begin
     //   if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin
     //     mcause.exception_code = 31'h4;
@@ -101,144 +136,154 @@ module Csr#(
         mie <= 32'b0;
         mip <= 32'b0;
         satp <= 32'b0;
+        priviledge_mode_reg <= 2'b11;
       end else begin
-        if(mtime_exceed_i && mie.mtie && mip.mtip)begin // time interrupt exist and machine mode enable all interrupt
-          // mip.mtip <= 1'b1;
-          mcause.interrupt <= 1'b1;
-          if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin
-            mcause.exception_code = 31'h4;
-            priviledge_mode_o = PRIVILEDGE_MODE_M;
-          end 
-          // else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
-          //   mcause.exception_code = 31'h7;
-          //   priviledge_mode_o = PRIVILEDGE_MODE_U;
-          // end
-        end else begin
-          casez(inst_i)
-            CSRRC:begin
-              priviledge_mode_o <= priviledge_mode_i;
-              if(inst_i[19:15])begin // only write csr when rs1 is not x0
-                case(inst_i[31:20])
-                  MSTATUS:begin
-                    mstatus <= mstatus & ~rf_rdata_a_i;
-                  end
-                  MTVEC:begin
-                    mtvec <= mtvec & ~rf_rdata_a_i;
-                  end
-                  MCAUSE:begin
-                    mcause <= mcause & ~rf_rdata_a_i;
-                  end
-                  MIP:begin
-                    mip <= mip & ~rf_rdata_a_i;
-                  end
-                  MIE:begin
-                    mie <= mie & ~rf_rdata_a_i;
-                  end
-                  MSCRATCH:begin
-                    mscratch <= mscratch & ~rf_rdata_a_i;
-                  end
-                  MEPC:begin
-                    mepc <= mepc & ~rf_rdata_a_i;
-                  end 
-                  SATP:begin
-                    satp <= satp & ~rf_rdata_a_i;
-                  end           
-                endcase
+        mip.mtip <= mtime_exceed_i;
+        casez(inst_i)
+          CSRRC:begin
+            if(inst_i[19:15])begin // only write csr when rs1 is not x0
+              case(inst_i[31:20])
+                MSTATUS:begin
+                  mstatus <= mstatus & ~rf_rdata_a_i;
+                end
+                MTVEC:begin
+                  mtvec <= mtvec & ~rf_rdata_a_i;
+                end
+                MCAUSE:begin
+                  mcause <= mcause & ~rf_rdata_a_i;
+                end
+                MIP:begin
+                  mip <= mip & ~rf_rdata_a_i;
+                end
+                MIE:begin
+                  mie <= mie & ~rf_rdata_a_i;
+                end
+                MSCRATCH:begin
+                  mscratch <= mscratch & ~rf_rdata_a_i;
+                end
+                MEPC:begin
+                  mepc <= mepc & ~rf_rdata_a_i;
+                end 
+                SATP:begin
+                  satp <= satp & ~rf_rdata_a_i;
+                end           
+              endcase
+            end
+          end
+          CSRRS:begin
+            if(inst_i[19:15])begin
+              case(inst_i[31:20])
+                MSTATUS:begin
+                  mstatus <= mstatus | rf_rdata_a_i;
+                end
+                MTVEC:begin
+                  mtvec <= mtvec | rf_rdata_a_i;
+                end
+                MCAUSE:begin
+                  mcause <= mcause | rf_rdata_a_i;
+                end
+                MIP:begin
+                  mip <= mip | rf_rdata_a_i;
+                end
+                MIE:begin
+                  mie <= mie | rf_rdata_a_i;
+                end
+                MSCRATCH:begin
+                  mscratch <= mscratch | rf_rdata_a_i;
+                end
+                MEPC:begin
+                  mepc <= mepc | rf_rdata_a_i;
+                end
+                SATP:begin
+                  satp <= satp | rf_rdata_a_i;
+                end                
+              endcase
+            end
+          end
+          CSRRW:begin
+            if(inst_i[19:15])begin
+              case(inst_i[31:20])
+                MSTATUS:begin
+                  mstatus <= rf_rdata_a_i ;
+                end
+                MTVEC:begin
+                  mtvec <= rf_rdata_a_i ;
+                end
+                MCAUSE:begin
+                  mcause <= rf_rdata_a_i ;
+                end
+                MIP:begin
+                  mip <= rf_rdata_a_i ;
+                end
+                MIE:begin
+                  mie <= rf_rdata_a_i ;
+                end
+                MSCRATCH:begin
+                  mscratch <= rf_rdata_a_i ;
+                end
+                MEPC:begin
+                  mepc <= rf_rdata_a_i ;
+                end
+                SATP:begin
+                  satp <= rf_rdata_a_i;
+                end           
+              endcase
+            end
+          end
+          EBREAK:begin
+            mepc <= pc_now_i; 
+            mcause.interrupt <= 1'b0;
+            mcause.exception_code <= 31'h3;
+            mstatus.mpp <= priviledge_mode_reg;
+            priviledge_mode_reg <= PRIVILEDGE_MODE_M;
+            pc_next_o <= {mtvec[31:2],2'b00};
+          end
+          ECALL:begin
+            mepc <= pc_now_i; // ECALL is a exception, not interruption, thus mepc should save current pc , not pc+4
+            mcause.interrupt <= 2'b0;
+            mstatus.mpp <= priviledge_mode_reg;
+            pc_next_o <= {mtvec[31:2],2'b00};
+            if(priviledge_mode_reg == PRIVILEDGE_MODE_U)begin // Environment call from user mode
+              mcause.exception_code <= 31'h8;
+              priviledge_mode_reg <= PRIVILEDGE_MODE_M;
+            end else if(priviledge_mode_reg == PRIVILEDGE_MODE_M)begin //Environment call from machine mode
+              mcause.exception_code <= 31'hb;
+              priviledge_mode_reg <= PRIVILEDGE_MODE_U;
+            end
+          end
+          MRET:begin
+            pc_next_o <= mepc;
+            priviledge_mode_reg <= mstatus.mpp;
+            mie.mtie <= 1'b1;
+          end
+          default:begin
+            
+            if(mip.mtip && (priviledge_mode_reg == PRIVILEDGE_MODE_U || mie.mtie && priviledge_mode_reg == PRIVILEDGE_MODE_M))begin // time interrupt exist and machine mode enable all interrupt
+              if(priviledge_mode_reg == PRIVILEDGE_MODE_U)begin 
+                mie.mtie <= 0; // unable the mtie, otherwise pc will stuck in mtvec
+                mcause.interrupt <= 1'b1;
+                mepc <= pc_now_i + 4;
+                pc_next_o <= {mtvec[31:2],2'b00};
+                mcause.exception_code <= 31'h7;
+                mstatus.mpp <= PRIVILEDGE_MODE_U;
+                priviledge_mode_reg <= PRIVILEDGE_MODE_M;
+              end else begin
+                pc_next_o <= 32'b0;
               end
-            end
-            CSRRS:begin
-              priviledge_mode_o <= priviledge_mode_i;
-              if(inst_i[19:15])begin
-                case(inst_i[31:20])
-                  MSTATUS:begin
-                    mstatus <= mstatus | rf_rdata_a_i;
-                  end
-                  MTVEC:begin
-                    mtvec <= mtvec | rf_rdata_a_i;
-                  end
-                  MCAUSE:begin
-                    mcause <= mcause | rf_rdata_a_i;
-                  end
-                  MIP:begin
-                    mip <= mip | rf_rdata_a_i;
-                  end
-                  MIE:begin
-                    mie <= mie | rf_rdata_a_i;
-                  end
-                  MSCRATCH:begin
-                    mscratch <= mscratch | rf_rdata_a_i;
-                  end
-                  MEPC:begin
-                    mepc <= mepc | rf_rdata_a_i;
-                  end
-                  SATP:begin
-                    satp <= satp | rf_rdata_a_i;
-                  end                
-                endcase
-              end
-            end
-            CSRRW:begin
-              priviledge_mode_o <= priviledge_mode_i;
-              if(inst_i[19:15])begin
-                case(inst_i[31:20])
-                  MSTATUS:begin
-                    mstatus <= rf_rdata_a_i ;
-                  end
-                  MTVEC:begin
-                    mtvec <= rf_rdata_a_i ;
-                  end
-                  MCAUSE:begin
-                    mcause <= rf_rdata_a_i ;
-                  end
-                  MIP:begin
-                    mip <= rf_rdata_a_i ;
-                  end
-                  MIE:begin
-                    mie <= rf_rdata_a_i ;
-                  end
-                  MSCRATCH:begin
-                    mscratch <= rf_rdata_a_i ;
-                  end
-                  MEPC:begin
-                    mepc <= rf_rdata_a_i ;
-                  end
-                  SATP:begin
-                    satp <= rf_rdata_a_i;
-                  end           
-                endcase
-              end
-            end
-            EBREAK:begin
-              mepc <= pc_now_i; 
-              mcause.interrupt <= 1'b0;
-              mcause.exception_code <= 31'h3;
-              mstatus.mpp <= priviledge_mode_i;
-              priviledge_mode_o <= PRIVILEDGE_MODE_M;
-              pc_next_o <= {mtvec[31:2],2'b00};
-            end
-            ECALL:begin
-              mepc <= pc_now_i; // ECALL is a exception, not interruption, thus mepc should save current pc , not pc+4
-              mcause.interrupt <= 2'b0;
-              mstatus.mpp <= priviledge_mode_i;
-              pc_next_o <= {mtvec[31:2],2'b00};
-              if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin // Environment call from user mode
-                mcause.exception_code <= 31'h8;
-                priviledge_mode_o <= PRIVILEDGE_MODE_M;
-              end else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin //Environment call from machine mode
-                mcause.exception_code <= 31'hb;
-                priviledge_mode_o <= PRIVILEDGE_MODE_U;
-              end
-            end
-            MRET:begin
-              pc_next_o <= mepc;
-              priviledge_mode_o <= mstatus.mpp;
-            end
-            default:begin
+              // else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
+              //   mie.mtie <= 0; // unable the mtie, otherwise pc will stuck in mtvec
+              //   mcause.interrupt <= 1'b1;
+              //   mcause.exception_code <= 31'h7;
+              //   mepc <= pc_now_i + 4;
+              //   mstatus.mpp <= PRIVILEDGE_MODE_M;
+              //   priviledge_mode_o <= PRIVILEDGE_MODE_M;
+              //   pc_next_o <= {mtvec[31:2],2'b00};
+              // end
+            end else begin
               pc_next_o <= 32'b0;
-              priviledge_mode_o <= priviledge_mode_i;
-            end
-          endcase
-        end
+            end 
+          end
+        endcase
       end
     end
 endmodule
