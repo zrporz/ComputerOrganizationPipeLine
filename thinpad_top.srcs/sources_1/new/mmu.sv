@@ -72,7 +72,7 @@ always_comb begin
     // 不太确定这个东西是否是对的
     if ((32'h8000_0000 <= master_addr_in) && ( master_addr_in <= 32'h803FFFFF)) begin
         device = DEVICE_SRAM; // BaseRAM
-    end else if ((32'h8000_4000 <= master_addr_in) && ( master_addr_in <= 32'h807FFFFF)) begin
+    end else if ((32'h8040_0000 <= master_addr_in) && ( master_addr_in <= 32'h807EFFFF)) begin
         device = DEVICE_SRAM; // ExtRAM
     end
 
