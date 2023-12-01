@@ -49,9 +49,9 @@ module tb;
   // parameter BASE_RAM_INIT_FILE = "/tmp/main.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�?
   // parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路�?
   // parameter FLASH_INIT_FILE = "/tmp/kernel.elf";  // Flash 初始化文件，请修改为实际的绝对路�?
-  // parameter BASE_RAM_INIT_FILE = "C:\\Users\\tehaj\\Desktop\\code\\ComputerOrganizaion\\rv-2023\\supervisor-rv\\kernel\\kernel.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�???
+  parameter BASE_RAM_INIT_FILE = "C:\\Users\\tehaj\\Desktop\\code\\ComputerOrganizaion\\rv-2023\\supervisor-rv\\kernel\\kernel.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�???
   // parameter BASE_RAM_INIT_FILE = "E:\\CSAPP-2\\project\\kernel_v2.bin";
-  parameter BASE_RAM_INIT_FILE = "E:\\rv-2023-new\\rv-2023\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
+  // parameter BASE_RAM_INIT_FILE = "E:\\rv-2023-new\\rv-2023\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
   parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路�???
   parameter FLASH_INIT_FILE = "/tmp/kernel.elf";  // Flash 初始化文件，请修改为实际的绝对路�???
 
@@ -96,15 +96,15 @@ module tb;
     uart.pc_send_byte(8'h41); // ASCII 'A'
     $display("send A");
 
-    uart.pc_send_byte(8'h04);
+    uart.pc_send_byte(8'h00);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h10);
     #10000;
-    uart.pc_send_byte(8'h80); //send addr = 0x80100004
+    uart.pc_send_byte(8'h80); //send addr = 0x80100000
     #10000;
-    $display("send 80100004"); 
+    $display("send 80100000"); 
 
     #10000;
     uart.pc_send_byte(8'h10);
@@ -165,13 +165,38 @@ module tb;
     $display("send G");
     #10000;
 
-    uart.pc_send_byte(8'h04);
+    uart.pc_send_byte(8'h00);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h00); //send addr = 0x00000004
+    #10000;
+    $display("send 00000000"); 
+
+    #10000;
+    uart.pc_send_byte(8'h44);
+    $display("send D");
+    #10000;
+
+    uart.pc_send_byte(8'h00);
+    #10000;   
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h40);
+    #10000;
+    uart.pc_send_byte(8'h80); //send addr = 0x80400000
+    #10000;
+    $display("send 80400000"); 
+
+    uart.pc_send_byte(8'h04);
+    #10000;   
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h00); //send num = 0x00000004
     #10000;
     $display("send 00000004"); 
 
