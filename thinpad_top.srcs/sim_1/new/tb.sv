@@ -198,7 +198,12 @@ module tb;
     #10000;
     uart.pc_send_byte(8'h00); //send num = 0x00000004
     #10000;
+<<<<<<< HEAD
     $display("send 00000004"); 
+=======
+    $display("send 00000004");
+
+>>>>>>> 83e81dc57b9419152032ccab58452e227c054720
 
 
   end
