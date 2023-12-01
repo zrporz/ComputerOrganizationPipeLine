@@ -1,6 +1,7 @@
 // 这个文件�? thinpad_top.sv 中被调用
 // 目前是没�? TLB 的版�?
 `include "./headers/exception.svh"
+`include "./headers/mem.svh"
 module mmu (
     input wire clk,
     input wire rst,
