@@ -5,7 +5,9 @@ module PcController#(
     input wire [ADDR_WIDTH-1:0] pc_i,
     input wire [ADDR_WIDTH-1:0] pc_seq_nxt_i,
     input wire [ADDR_WIDTH-1:0] pc_branch_nxt_i,
+    input wire pc_branch_nxt_en,
     input wire [ADDR_WIDTH-1:0] pc_csr_nxt_i,
+    input wire pc_csr_nxt_en,
     output reg [ADDR_WIDTH-1:0] pc_nxt_o
 );
     // priority: csr > branch > seq
@@ -13,9 +15,9 @@ module PcController#(
     logic [ADDR_WIDTH-1:0] pc_nxt;
     always_comb begin
        pc_nxt = pc_i;
-       if(pc_csr_nxt_i)begin
+       if(pc_csr_nxt_en)begin
           pc_nxt = pc_csr_nxt_i;
-       end else if(pc_branch_nxt_i)begin
+       end else if(pc_branch_nxt_en)begin
           pc_nxt = pc_branch_nxt_i;
        end else if(pc_seq_nxt_i)begin
           pc_nxt = pc_seq_nxt_i;
