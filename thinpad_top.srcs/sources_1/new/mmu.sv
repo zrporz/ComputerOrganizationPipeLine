@@ -68,13 +68,16 @@ always_comb begin
     satp_mode = satp_in.mode;
     satp_ppn = satp_in.ppn;
 
-    device = DEVICE_UNKNOWN;
+    device = DEVICE_SRAM;
     // TODO：根据地址决定 device
     // 不太确定这个东西是否是对的
-    if ((32'h8000_0000 <= master_addr_in) && ( master_addr_in <= 32'h803FFFFF)) begin
-        device = DEVICE_SRAM; // BaseRAM
-    end else if ((32'h8040_0000 <= master_addr_in) && ( master_addr_in <= 32'h807EFFFF)) begin
-        device = DEVICE_SRAM; // ExtRAM
+
+    if (32'h10000000 <= master_addr_in && master_addr_in <= 32'h10000007) begin
+        device = DEVICE_UART;
+    end
+
+    else if ((master_addr_in == 32'h0200bff8 || master_addr_in == 32'h0200bffc || master_addr_in == 32'h02004000 || master_addr_in == 32'h02004004)) begin
+        device = DEVICE_MTIMER;
     end
 
     // if ((32'h7FC10000 <= master_addr_in) && ( master_addr_in <= 32'h7FFFF000)) begin
