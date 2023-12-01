@@ -96,15 +96,15 @@ module tb;
     uart.pc_send_byte(8'h41); // ASCII 'A'
     $display("send A");
 
-    uart.pc_send_byte(8'h04);
+    uart.pc_send_byte(8'h00);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h10);
     #10000;
-    uart.pc_send_byte(8'h80); //send addr = 0x80100004
+    uart.pc_send_byte(8'h80); //send addr = 0x80100000
     #10000;
-    $display("send 80100004"); 
+    $display("send 80100000"); 
 
     #10000;
     uart.pc_send_byte(8'h10);
@@ -165,7 +165,7 @@ module tb;
     $display("send G");
     #10000;
 
-    uart.pc_send_byte(8'h04);
+    uart.pc_send_byte(8'h00);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
@@ -173,7 +173,33 @@ module tb;
     #10000;
     uart.pc_send_byte(8'h00); //send addr = 0x00000004
     #10000;
-    $display("send 00000004"); 
+    $display("send 00000000"); 
+
+    #10000;
+    uart.pc_send_byte(8'h44);
+    $display("send D");
+    #10000;
+
+    uart.pc_send_byte(8'h00);
+    #10000;   
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h40);
+    #10000;
+    uart.pc_send_byte(8'h80); //send addr = 0x80400000
+    #10000;
+    $display("send 80400000"); 
+
+    uart.pc_send_byte(8'h04);
+    #10000;   
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h00); //send num = 0x00000004
+    #10000;
+    $display("send 00000004");
+
 
 
   end

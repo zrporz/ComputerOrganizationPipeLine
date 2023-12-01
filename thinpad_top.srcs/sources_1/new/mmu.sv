@@ -98,9 +98,9 @@ always_comb begin
     pte_2_ppn_0 = pte_2[19:10];
 
     if ((satp_mode && (mode_in != 2'b11) && (device == DEVICE_SRAM) && master_stb_in) || (page_table_state != STATE_INIT)) begin
-        page_table_en <= 1;
+        page_table_en = 1;
     end else begin
-        page_table_en <= 0;
+        page_table_en = 0;
     end
 end
 
