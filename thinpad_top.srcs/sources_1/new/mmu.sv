@@ -67,7 +67,7 @@ logic [ADDR_WIDTH-1:0] tlb_translate_addr;
 satp_t tlb_satp_out;
 // MMU to TLB
 logic tlb_translate_ack;
-pte_t tlb_translate_data_in;
+pte_t tlb_translate_in;
 
 
 
@@ -82,14 +82,16 @@ typedef enum logic [3:0] {
 device_t device;
 
 // 状�?�机
-typedef enum logic [2:0] {
+typedef enum logic [3:0] {
     STATE_INIT = 0,
     STATE_READ_1 = 1,
     STATE_WAIT_1 = 2,
     STATE_READ_2 = 3,
     STATE_WAIT_2 = 4,
     STATE_PPN_ACTION = 5,
-    STATE_PPN_WAIT = 6
+    STATE_PPN_WAIT = 6,
+    STATE_TLB_ACTION = 7,
+    STATE_TLB_WAIT = 8
 } state_p;
 state_p page_table_state;
 
@@ -133,12 +135,20 @@ always_comb begin
     pte_2_ppn_0 = pte_2[19:10];
 
     if ((satp_mode && (mode_in != 2'b11) && (device == DEVICE_SRAM) && master_stb_in) || (page_table_state != STATE_INIT)) begin
-        tlb_en = 1;  // TODO: check its correctness
+        //tlb_en = 1;  // TODO: check its correctness
+        
+        tlb_en = 1;
         page_table_en = 1;
     end else begin
+        tlb_en = 0;
         page_table_en = 0;
     end
 end
+
+logic is_translating;
+assign is_translating = (page_table_state != STATE_INIT) && (page_table_state != STATE_TLB_ACTION) && (page_table_state != STATE_TLB_WAIT);
+logic is_tlb;
+assign is_tlb = (page_table_state == STATE_TLB_ACTION) || (page_table_state == STATE_TLB_WAIT);
 
 
 always_ff @ (posedge clk) begin
@@ -148,12 +158,29 @@ always_ff @ (posedge clk) begin
         pte_1 <= 32'b0;
         pte_2 <= 32'b0;
         master_return_data_out <= 32'b0;
+        tlb_translate_ack <= 0;
     end else begin
-        if (tlb_en && tlb_ack) begin
-            page_table_state <= STATE_PPN_ACTION;
+        if ((tlb_en && tlb_ack) || is_tlb) begin
+            case (page_table_state)
+                STATE_INIT: begin
+                    page_table_state <= STATE_TLB_ACTION;
+                end
+                STATE_TLB_ACTION: begin
+                    if (mux_ack_in) begin
+                        master_return_data_out <= mux_data_in;
+                        page_table_state <= STATE_TLB_WAIT;
+                    end
+                end
+
+                STATE_TLB_WAIT: begin
+                    page_table_state <= STATE_INIT;
+                end
+            endcase 
+            
         end
+
         //if (page_table_en && !tlb_ack && tlb_translate_en) begin
-        if (page_table_en) begin
+        if (page_table_en && (!tlb_en || !tlb_ack || is_translating)) begin
             case (page_table_state)
                 STATE_INIT: begin
                     if (tlb_translate_en) begin
@@ -184,10 +211,14 @@ always_ff @ (posedge clk) begin
                 end
 
                 STATE_WAIT_2: begin
+                    // correct at here
+                    tlb_translate_ack <= 1;
+                    tlb_translate_in <= pte_2;
                     page_table_state <= STATE_PPN_ACTION;
                 end
 
                 STATE_PPN_ACTION : begin
+                    tlb_translate_ack <= 0;
                     if (mux_ack_in) begin
                         master_return_data_out <= mux_data_in;
                         page_table_state <= STATE_PPN_WAIT;
@@ -213,10 +244,15 @@ always_comb begin
     mux_sel_out = master_sel_in;
     mux_stb_out = master_stb_in;
     // mux_cyc_out = master_cyc_in;
-    master_data_out = mux_data_in;
-    master_ack_out = mux_ack_in;
+    if (master_stb_in) begin
+        master_data_out = mux_data_in;
+        master_ack_out = mux_ack_in;
+    end else begin
+        master_data_out = 0;
+        master_ack_out = 0;
+    end
 
-    tlb_translate_ack = 0;
+    // tlb_translate_ack = 0;
 
     if (satp_mode && (mode_in != 2'b11) && (device == DEVICE_SRAM) && master_stb_in && master_cyc_in) begin
         case (page_table_state)
@@ -265,18 +301,17 @@ always_comb begin
                 master_ack_out = 0;
                 master_data_out = 0;
             end
-            STATE_PPN_ACTION : begin
-                if (tlb_en && tlb_ack) begin
-                    mux_addr_out = tlb_addr_out;
-                end else begin
-                    mux_addr_out = {pte_2_ppn_1[9:0], pte_2_ppn_0, offset};
-                end
+            STATE_PPN_ACTION: begin
+                mux_addr_out = {pte_2_ppn_1[9:0], pte_2_ppn_0, offset};
                 mux_data_out = master_data_in;
                 mux_we_out = master_we_in; // read
                 mux_sel_out = master_sel_in;
                 mux_stb_out = 1;
                 master_ack_out = 0;
                 master_data_out = 0;
+
+                
+
             end
             STATE_PPN_WAIT: begin
                 mux_addr_out = 0;
@@ -285,10 +320,34 @@ always_comb begin
                 mux_sel_out = 0;
                 mux_stb_out = 0;
                 // Check whether signals used
-                if (tlb_translate_en) begin
-                    tlb_translate_ack = 1;
-                    tlb_translate_data_in = master_return_data_out;
-                end
+
+                // NOT DATA, ADDR!
+                // tlb_translate_ack = 1;
+                // tlb_translate_data_in = master_return_data_out;
+                // end else begin
+                //     tlb_translate_ack = 0;
+                //     tlb_translate_data_in = 32'hffffffff;
+
+                master_ack_out = 1;
+                master_data_out = master_return_data_out;
+            end
+            STATE_TLB_ACTION: begin
+                mux_addr_out = tlb_addr_out;
+                mux_data_out = master_data_in;
+                mux_we_out = master_we_in; // read
+                mux_sel_out = master_sel_in;
+                mux_stb_out = 1;
+                master_ack_out = 0;
+                master_data_out = 0;
+            end
+            STATE_TLB_WAIT: begin
+                mux_addr_out = 0;
+                mux_data_out = 0;
+                mux_we_out = 0;
+                mux_sel_out = 0;
+                mux_stb_out = 0;
+                // Check whether signals used
+
                 master_ack_out = 1;
                 master_data_out = master_return_data_out;
             end
@@ -315,7 +374,7 @@ mmu_tlb TLB(
     .satp_out(tlb_satp_out),
 
     .translate_ack(tlb_translate_ack),
-    .translate_data_in(tlb_translate_data_in)
+    .translate_pte_in(tlb_translate_in)
 );
 
     

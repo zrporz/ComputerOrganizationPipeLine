@@ -24,16 +24,16 @@ module mmu_tlb #(
 
     // MMU to TLB
     input wire translate_ack,
-    input pte_t translate_data_in
+    input pte_t translate_pte_in
 );
 
     tlbe_t tlb [31:0];
     tlbe_t tlbe;
     pte_t pte;
     logic [1:0] rsw;
-    logic D, A, G, U, X, W, R, V;
     tlb_addr_t tlb_virt_addr;
     assign tlb_virt_addr = query_addr;
+    logic [ADDR_WIDTH-1:0] last_query_addr;
 
     always_comb begin
         if(mode_in == 2'b11 || satp_in.mode == 0) begin
@@ -41,8 +41,7 @@ module mmu_tlb #(
             tlbe.asid = satp_in.asid;
 
             rsw = 2'b00;
-            D = 0; A = 0; G = 0; U = 0; X = 1; W = 1; R = 1; V = 1;
-            pte = {2'b00, query_addr[31:12], rsw, D, A, G, U, X, W, R, V};
+            pte = {2'b00, query_addr[31:12], rsw, 8'b00001111};  // TODO: check 
             tlbe.pte = pte;
 
             tlbe.valid = 1;            
@@ -53,26 +52,35 @@ module mmu_tlb #(
     end
 
     logic hit_tlb;
+    logic is_translating;
 
     always_comb begin
-        if(query_en && tlbe.valid == 1 && tlbe.tlbi == tlb_virt_addr.tlbi && (tlbe.asid == satp_in.asid || G)) begin
+        // TODO
+        if(query_en && tlbe.valid == 1 && tlbe.tlbi == tlb_virt_addr.tlbi && (tlbe.asid == satp_in.asid || tlbe.pte.G)) begin
+        //if(query_en && tlbe.valid == 1 && tlbe.tlbi == tlb_virt_addr.tlbi && (tlbe.asid == satp_in.asid || tlbe.pte.G)) begin
             hit_tlb = 1;
         end else begin
             hit_tlb = 0;
         end
     end
 
-
+    logic same_translate_query;
+    assign same_translate_query = (last_query_addr == query_addr);
 
     always_comb begin
         translate_en = 0;
-        tlb_ack = hit_tlb || !query_en;
+        translate_addr = 32'hffffffff;
+        // tlb_ack = hit_tlb || !query_en;
+        tlb_ack = hit_tlb && !is_translating; // TODO: check
+        satp_out = satp_in;
         if(query_en) begin
             if(hit_tlb) begin 
                 translate_en = 0;
                 translate_addr = 32'hffffffff;
                 tlb_addr_out = {tlbe.pte.ppn1[9:0], tlbe.pte.ppn0, tlb_virt_addr.offset};
-            end else if(!translate_ack) begin
+            // end else if(!translate_ack) begin
+            // end else if(!same_translate_query) begin
+            end else begin
                 translate_en = 1;
                 translate_addr = query_addr;
                 satp_out = satp_in;
@@ -115,12 +123,22 @@ module mmu_tlb #(
             tlb[29] <= 0;
             tlb[30] <= 0;
             tlb[31] <= 0;
+            last_query_addr <= 0;
+            is_translating <= 0;
         end else begin
+            last_query_addr <= query_addr;
+
+            if (translate_ack) begin
+                is_translating <= 0;
+            end else if (translate_en) begin
+                is_translating <= 1;
+            end
+
             if(query_en && translate_ack) begin
                 tlb[tlb_virt_addr.tlbt] <= {
                     tlb_virt_addr.tlbi,
                     satp_in.asid,
-                    translate_data_in,
+                    translate_pte_in,
                     1'b1
                 };
             end
