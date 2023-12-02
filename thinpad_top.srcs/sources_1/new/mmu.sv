@@ -160,7 +160,7 @@ always_ff @ (posedge clk) begin
         master_return_data_out <= 32'b0;
         tlb_translate_ack <= 0;
     end else begin
-        if ((tlb_en && tlb_ack) || is_tlb) begin
+        if (page_table_en && ((tlb_en && tlb_ack) || is_tlb)) begin
             case (page_table_state)
                 STATE_INIT: begin
                     page_table_state <= STATE_TLB_ACTION;
