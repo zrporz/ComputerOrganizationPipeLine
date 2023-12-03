@@ -76,7 +76,7 @@ module mmu_tlb #(
         if(query_en) begin
             if(hit_tlb) begin 
                 translate_en = 0;
-                translate_addr = 32'hffffffff;
+                translate_addr = query_addr;
                 tlb_addr_out = {tlbe.pte.ppn1[9:0], tlbe.pte.ppn0, tlb_virt_addr.offset};
             // end else if(!translate_ack) begin
             // end else if(!same_translate_query) begin

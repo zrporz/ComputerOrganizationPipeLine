@@ -151,6 +151,10 @@ logic is_tlb;
 assign is_tlb = (page_table_state == STATE_TLB_ACTION) || (page_table_state == STATE_TLB_WAIT);
 
 
+logic [ADDR_WIDTH-1:0] last_master_addr_in;
+logic same_master_addr_in;
+assign same_master_addr_in = (last_master_addr_in == master_addr_in);
+
 always_ff @ (posedge clk) begin
     if (rst) begin
         // 如果�? reset, 就全部置�? 0
@@ -159,77 +163,83 @@ always_ff @ (posedge clk) begin
         pte_2 <= 32'b0;
         master_return_data_out <= 32'b0;
         tlb_translate_ack <= 0;
+        last_master_addr_in <= 0;
     end else begin
-        if (page_table_en && ((tlb_en && tlb_ack) || is_tlb)) begin
-            case (page_table_state)
-                STATE_INIT: begin
-                    page_table_state <= STATE_TLB_ACTION;
-                end
-                STATE_TLB_ACTION: begin
-                    if (mux_ack_in) begin
-                        master_return_data_out <= mux_data_in;
-                        page_table_state <= STATE_TLB_WAIT;
+        last_master_addr_in <= master_addr_in;
+        if (page_table_state != STATE_INIT && !same_master_addr_in) begin
+            page_table_state <= STATE_INIT;
+        end else begin
+            if (page_table_en && ((tlb_en && tlb_ack) || is_tlb)) begin
+                case (page_table_state)
+                    STATE_INIT: begin
+                        page_table_state <= STATE_TLB_ACTION;
                     end
-                end
-
-                STATE_TLB_WAIT: begin
-                    page_table_state <= STATE_INIT;
-                end
-            endcase 
-            
-        end
-
-        //if (page_table_en && !tlb_ack && tlb_translate_en) begin
-        if (page_table_en && (!tlb_en || !tlb_ack || is_translating)) begin
-            case (page_table_state)
-                STATE_INIT: begin
-                    if (tlb_translate_en) begin
-                        pte_1 <= 32'b0;
-                        pte_2 <= 32'b0;
-                        master_return_data_out <= 32'b0;
-                        page_table_state <= STATE_READ_1;
+                    STATE_TLB_ACTION: begin
+                        if (mux_ack_in) begin
+                            master_return_data_out <= mux_data_in;
+                            page_table_state <= STATE_TLB_WAIT;
+                        end
                     end
-                end
-                STATE_READ_1 : begin
-                    if (mux_ack_in) begin
-                        // 读取第一级页�?
-                        pte_1 <= mux_data_in;
-                        page_table_state <= STATE_WAIT_1;
+
+                    STATE_TLB_WAIT: begin
+                        page_table_state <= STATE_INIT;
                     end
-                end
+                endcase 
+                
+            end
 
-                STATE_WAIT_1: begin
-                    page_table_state <=  STATE_READ_2;
-                end
-
-                STATE_READ_2 : begin
-                    if (mux_ack_in) begin
-                        // 读取第二级页�?
-                        pte_2 <= mux_data_in;
-                        page_table_state <= STATE_WAIT_2;
+            //if (page_table_en && !tlb_ack && tlb_translate_en) begin
+            if (page_table_en && (!tlb_en || !tlb_ack || is_translating)) begin
+                case (page_table_state)
+                    STATE_INIT: begin
+                        if (tlb_translate_en) begin
+                            pte_1 <= 32'b0;
+                            pte_2 <= 32'b0;
+                            master_return_data_out <= 32'b0;
+                            page_table_state <= STATE_READ_1;
+                        end
                     end
-                end
-
-                STATE_WAIT_2: begin
-                    // correct at here
-                    tlb_translate_ack <= 1;
-                    tlb_translate_in <= pte_2;
-                    page_table_state <= STATE_PPN_ACTION;
-                end
-
-                STATE_PPN_ACTION : begin
-                    tlb_translate_ack <= 0;
-                    if (mux_ack_in) begin
-                        master_return_data_out <= mux_data_in;
-                        page_table_state <= STATE_PPN_WAIT;
+                    STATE_READ_1 : begin
+                        if (mux_ack_in) begin
+                            // 读取第一级页�?
+                            pte_1 <= mux_data_in;
+                            page_table_state <= STATE_WAIT_1;
+                        end
                     end
-                end
 
-                STATE_PPN_WAIT: begin
-                    page_table_state <= STATE_INIT;
-                end
-            endcase
+                    STATE_WAIT_1: begin
+                        page_table_state <=  STATE_READ_2;
+                    end
 
+                    STATE_READ_2 : begin
+                        if (mux_ack_in) begin
+                            // 读取第二级页�?
+                            pte_2 <= mux_data_in;
+                            page_table_state <= STATE_WAIT_2;
+                        end
+                    end
+
+                    STATE_WAIT_2: begin
+                        // correct at here
+                        tlb_translate_ack <= 1;
+                        tlb_translate_in <= pte_2;
+                        page_table_state <= STATE_PPN_ACTION;
+                    end
+
+                    STATE_PPN_ACTION : begin
+                        tlb_translate_ack <= 0;
+                        if (mux_ack_in) begin
+                            master_return_data_out <= mux_data_in;
+                            page_table_state <= STATE_PPN_WAIT;
+                        end
+                    end
+
+                    STATE_PPN_WAIT: begin
+                        page_table_state <= STATE_INIT;
+                    end
+                endcase
+
+            end
         end
     end
 end
