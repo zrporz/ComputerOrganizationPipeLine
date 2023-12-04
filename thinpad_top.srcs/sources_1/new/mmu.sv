@@ -1,12 +1,17 @@
-// 这个文件�? thinpad_top.sv 中被调用
-// 目前是没�? TLB 的版�?
+// 这个文件 thinpad_top.sv 中被调用
+// Disable TLB for now
+// Look up to TLB first
+// if TLB miss, then look up to Page Table
 `include "./headers/exception.svh"
 `include "./headers/mem.svh"
-module mmu (
+module mmu #(
+    parameter ADDR_WIDTH = 32,
+    parameter DATA_WIDTH = 32
+) (
     input wire clk,
     input wire rst,
 
-    // master
+    // master: to wishbone
     input wire [31:0] master_addr_in,
     input wire [31:0] master_data_in,
     output reg [31:0] master_data_out,  // 这个�?要读�? mux 中过来的数据
@@ -16,7 +21,7 @@ module mmu (
     input wire master_cyc_in,
     output reg master_ack_out,
     
-    // mux
+    // mux: from wishbone
     output reg [31:0] mux_addr_out,
     output reg [31:0] mux_data_out,
     input wire [31:0] mux_data_in,       // �?终需要把这个 mux_data_in 数据写到 master_data_out �?
@@ -27,7 +32,6 @@ module mmu (
     input wire mux_ack_in,
 
     // mode
-    // input priviledge_mode_t mode_in,
     input wire[1:0] mode_in,
     // satp
     input satp_t satp_in
@@ -53,6 +57,20 @@ logic [9:0] pte_2_ppn_0;
 
 logic [31:0] master_return_data_out;
 
+logic tlb_en;
+logic tlb_ack;
+logic [31:0] tlb_addr_out;
+
+// TLB to MMU
+logic tlb_translate_en;
+logic [ADDR_WIDTH-1:0] tlb_translate_addr;
+satp_t tlb_satp_out;
+// MMU to TLB
+logic tlb_translate_ack;
+pte_t tlb_translate_in;
+
+
+
 typedef enum logic [3:0] { 
     DEVICE_SRAM,
     DEVICE_UART,
@@ -62,6 +80,20 @@ typedef enum logic [3:0] {
     DEVICE_UNKNOWN
 } device_t;
 device_t device;
+
+// 状�?�机
+typedef enum logic [3:0] {
+    STATE_INIT = 0,
+    STATE_READ_1 = 1,
+    STATE_WAIT_1 = 2,
+    STATE_READ_2 = 3,
+    STATE_WAIT_2 = 4,
+    STATE_PPN_ACTION = 5,
+    STATE_PPN_WAIT = 6,
+    STATE_TLB_ACTION = 7,
+    STATE_TLB_WAIT = 8
+} state_p;
+state_p page_table_state;
 
 always_comb begin
     // �? satp 寄存器中取出 mode �? ppn 信息
@@ -87,9 +119,14 @@ always_comb begin
     // end
 
     // 取出虚地�?
-    vpn_1 = master_addr_in[31:22];
-    vpn_2 = master_addr_in[21:12];
-    offset = master_addr_in[11:0];
+    // vpn_1 = master_addr_in[31:22];
+    // vpn_2 = master_addr_in[21:12];
+    // offset = master_addr_in[11:0];
+    
+    // same meaning as above
+    vpn_1 = tlb_translate_addr[31:22];
+    vpn_2 = tlb_translate_addr[21:12];
+    offset = tlb_translate_addr[11:0];
 
     // 取出页表项中的实地址
     pte_1_ppn_1 = pte_1[31:20];
@@ -98,24 +135,25 @@ always_comb begin
     pte_2_ppn_0 = pte_2[19:10];
 
     if ((satp_mode && (mode_in != 2'b11) && (device == DEVICE_SRAM) && master_stb_in) || (page_table_state != STATE_INIT)) begin
+        //tlb_en = 1;  // TODO: check its correctness
+        
+        tlb_en = 1;
         page_table_en = 1;
     end else begin
+        tlb_en = 0;
         page_table_en = 0;
     end
 end
 
-// 状�?�机
-typedef enum logic [2:0] {
-    STATE_INIT = 0,
-    STATE_READ_1 = 1,
-    STATE_WAIT_1 = 2,
-    STATE_READ_2 = 3,
-    STATE_WAIT_2 = 4,
-    STATE_PPN_ACTION = 5,
-    STATE_PPN_WAIT = 6
-} state_p;
+logic is_translating;
+assign is_translating = (page_table_state != STATE_INIT) && (page_table_state != STATE_TLB_ACTION) && (page_table_state != STATE_TLB_WAIT);
+logic is_tlb;
+assign is_tlb = (page_table_state == STATE_TLB_ACTION) || (page_table_state == STATE_TLB_WAIT);
 
-state_p page_table_state;
+
+logic [ADDR_WIDTH-1:0] last_master_addr_in;
+logic same_master_addr_in;
+assign same_master_addr_in = (last_master_addr_in == master_addr_in);
 
 always_ff @ (posedge clk) begin
     if (rst) begin
@@ -124,52 +162,84 @@ always_ff @ (posedge clk) begin
         pte_1 <= 32'b0;
         pte_2 <= 32'b0;
         master_return_data_out <= 32'b0;
+        tlb_translate_ack <= 0;
+        last_master_addr_in <= 0;
     end else begin
-        if (page_table_en) begin
-            case (page_table_state)
-                STATE_INIT: begin
-                    pte_1 <= 32'b0;
-                    pte_2 <= 32'b0;
-                    master_return_data_out <= 32'b0;
-                    page_table_state <= STATE_READ_1;
-                end
-
-                STATE_READ_1 : begin
-                    if (mux_ack_in) begin
-                        // 读取第一级页�?
-                        pte_1 <= mux_data_in;
-                        page_table_state <= STATE_WAIT_1;
+        last_master_addr_in <= master_addr_in;
+        if (page_table_state != STATE_INIT && !same_master_addr_in) begin
+            page_table_state <= STATE_INIT;
+        end else begin
+            if (page_table_en && ((tlb_en && tlb_ack) || is_tlb)) begin
+                case (page_table_state)
+                    STATE_INIT: begin
+                        page_table_state <= STATE_TLB_ACTION;
                     end
-                end
-
-                STATE_WAIT_1: begin
-                    page_table_state <=  STATE_READ_2;
-                end
-
-                STATE_READ_2 : begin
-                    if (mux_ack_in) begin
-                        // 读取第二级页�?
-                        pte_2 <= mux_data_in;
-                        page_table_state <= STATE_WAIT_2;
+                    STATE_TLB_ACTION: begin
+                        if (mux_ack_in) begin
+                            master_return_data_out <= mux_data_in;
+                            page_table_state <= STATE_TLB_WAIT;
+                        end
                     end
-                end
 
-                STATE_WAIT_2: begin
-                    page_table_state <= STATE_PPN_ACTION;
-                end
-
-                STATE_PPN_ACTION : begin
-                    if (mux_ack_in) begin
-                        master_return_data_out <= mux_data_in;
-                        page_table_state <= STATE_PPN_WAIT;
+                    STATE_TLB_WAIT: begin
+                        page_table_state <= STATE_INIT;
                     end
-                end
+                endcase 
+                
+            end
 
-                STATE_PPN_WAIT: begin
-                    page_table_state <= STATE_INIT;
-                end
-            endcase
+            //if (page_table_en && !tlb_ack && tlb_translate_en) begin
+            if (page_table_en && (!tlb_en || !tlb_ack || is_translating)) begin
+                case (page_table_state)
+                    STATE_INIT: begin
+                        if (tlb_translate_en) begin
+                            pte_1 <= 32'b0;
+                            pte_2 <= 32'b0;
+                            master_return_data_out <= 32'b0;
+                            page_table_state <= STATE_READ_1;
+                        end
+                    end
+                    STATE_READ_1 : begin
+                        if (mux_ack_in) begin
+                            // 读取第一级页�?
+                            pte_1 <= mux_data_in;
+                            page_table_state <= STATE_WAIT_1;
+                        end
+                    end
 
+                    STATE_WAIT_1: begin
+                        page_table_state <=  STATE_READ_2;
+                    end
+
+                    STATE_READ_2 : begin
+                        if (mux_ack_in) begin
+                            // 读取第二级页�?
+                            pte_2 <= mux_data_in;
+                            page_table_state <= STATE_WAIT_2;
+                        end
+                    end
+
+                    STATE_WAIT_2: begin
+                        // correct at here
+                        tlb_translate_ack <= 1;
+                        tlb_translate_in <= pte_2;
+                        page_table_state <= STATE_PPN_ACTION;
+                    end
+
+                    STATE_PPN_ACTION : begin
+                        tlb_translate_ack <= 0;
+                        if (mux_ack_in) begin
+                            master_return_data_out <= mux_data_in;
+                            page_table_state <= STATE_PPN_WAIT;
+                        end
+                    end
+
+                    STATE_PPN_WAIT: begin
+                        page_table_state <= STATE_INIT;
+                    end
+                endcase
+
+            end
         end
     end
 end
@@ -184,8 +254,15 @@ always_comb begin
     mux_sel_out = master_sel_in;
     mux_stb_out = master_stb_in;
     // mux_cyc_out = master_cyc_in;
-    master_data_out = mux_data_in;
-    master_ack_out = mux_ack_in;
+    if (master_stb_in) begin
+        master_data_out = mux_data_in;
+        master_ack_out = mux_ack_in;
+    end else begin
+        master_data_out = 0;
+        master_ack_out = 0;
+    end
+
+    // tlb_translate_ack = 0;
 
     if (satp_mode && (mode_in != 2'b11) && (device == DEVICE_SRAM) && master_stb_in && master_cyc_in) begin
         case (page_table_state)
@@ -234,7 +311,7 @@ always_comb begin
                 master_ack_out = 0;
                 master_data_out = 0;
             end
-            STATE_PPN_ACTION : begin
+            STATE_PPN_ACTION: begin
                 mux_addr_out = {pte_2_ppn_1[9:0], pte_2_ppn_0, offset};
                 mux_data_out = master_data_in;
                 mux_we_out = master_we_in; // read
@@ -242,6 +319,9 @@ always_comb begin
                 mux_stb_out = 1;
                 master_ack_out = 0;
                 master_data_out = 0;
+
+                
+
             end
             STATE_PPN_WAIT: begin
                 mux_addr_out = 0;
@@ -249,11 +329,63 @@ always_comb begin
                 mux_we_out = 0;
                 mux_sel_out = 0;
                 mux_stb_out = 0;
+                // Check whether signals used
+
+                // NOT DATA, ADDR!
+                // tlb_translate_ack = 1;
+                // tlb_translate_data_in = master_return_data_out;
+                // end else begin
+                //     tlb_translate_ack = 0;
+                //     tlb_translate_data_in = 32'hffffffff;
+
+                master_ack_out = 1;
+                master_data_out = master_return_data_out;
+            end
+            STATE_TLB_ACTION: begin
+                mux_addr_out = tlb_addr_out;
+                mux_data_out = master_data_in;
+                mux_we_out = master_we_in; // read
+                mux_sel_out = master_sel_in;
+                mux_stb_out = 1;
+                master_ack_out = 0;
+                master_data_out = 0;
+            end
+            STATE_TLB_WAIT: begin
+                mux_addr_out = 0;
+                mux_data_out = 0;
+                mux_we_out = 0;
+                mux_sel_out = 0;
+                mux_stb_out = 0;
+                // Check whether signals used
+
                 master_ack_out = 1;
                 master_data_out = master_return_data_out;
             end
         endcase
     end
 end
+
+
+
+mmu_tlb TLB(
+    .clk(clk),
+    .rst(rst),
+
+    .mode_in(mode_in),
+    .satp_in(satp_in),
+    .query_en(tlb_en),
+    .query_addr(master_addr_in),
+
+    .tlb_ack(tlb_ack),
+    .tlb_addr_out(tlb_addr_out),
+
+    .translate_en(tlb_translate_en),
+    .translate_addr(tlb_translate_addr),
+    .satp_out(tlb_satp_out),
+
+    .translate_ack(tlb_translate_ack),
+    .translate_pte_in(tlb_translate_in)
+);
+
     
 endmodule
