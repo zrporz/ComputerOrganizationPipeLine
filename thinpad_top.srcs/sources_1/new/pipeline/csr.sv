@@ -24,18 +24,21 @@ module Csr#(
     parameter  CSRRC= 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS= 32'b????_????_????_????_?010_????_?111_0011;
     parameter  CSRRW= 32'b????_????_????_????_?001_????_?111_0011;
+    parameter  CSRRCI= 32'b????_????_????_????_?111_????_?111_0011;
+    parameter  CSRRSI= 32'b????_????_????_????_?110_????_?111_0011;
+    parameter  CSRRWI= 32'b????_????_????_????_?101_????_?111_0011;
     parameter  EBREAK= 32'b0000_0000_0001_0000_0000_0000_0111_0011;
     parameter  ECALL= 32'b0000_0000_0000_0000_0000_0000_0111_0011;
     parameter  MRET= 32'b0011_0000_0010_0000_0000_0000_0111_0011;
     typedef enum logic [11:0]{
-        MSTATUS= 12'h300,
-        MIE= 12'h304,
-        MTVEC= 12'h305,
-        MSCRATCH= 12'h340,
-        MEPC= 12'h341,
-        MCAUSE= 12'h342,
-        MIP= 12'h344,
-        SATP= 12'h180
+      MSTATUS= 12'h300,
+      MIE= 12'h304,
+      MTVEC= 12'h305,
+      MSCRATCH= 12'h340,
+      MEPC= 12'h341,
+      MCAUSE= 12'h342,
+      MIP= 12'h344,
+      SATP= 12'h180
     } csr_reg_t;
 
     mtvec_t mtvec;
@@ -47,6 +50,7 @@ module Csr#(
     mip_t mip;
     satp_t satp;
     reg[1:0] priviledge_mode_reg; // 00:User, 01:Supervisor, 10:Reserved, 11:Machine
+    logic[31:0] uimm;
     assign satp_o = satp;
     // always_comb begin
     //   if(mip.mtip && mie.mtie)begin // time interrupt exist and machine mode enable all interrupt
@@ -82,42 +86,28 @@ module Csr#(
 
     end
     always_comb begin
-      
       rf_wdata_o = 32'b0;
       casez(inst_i)
-        CSRRC,CSRRS,CSRRW: begin
+        CSRRC,CSRRS,CSRRW,CSRRCI,CSRRSI,CSRRWI: begin
           case(inst_i[31:20])
-            MSTATUS:begin
-              rf_wdata_o = mstatus ;
-            end
-            MTVEC:begin
-              rf_wdata_o = mtvec;
-            end
-            MCAUSE:begin
-              rf_wdata_o = mcause;
-            end
-            MIP:begin
-              rf_wdata_o = mip;
-            end
-            MIE:begin
-              rf_wdata_o = mie;
-            end
-            MSCRATCH:begin
-              rf_wdata_o = mscratch;
-            end
-            MEPC:begin
-              rf_wdata_o = mepc;
-            end
-            SATP:begin
-              rf_wdata_o = satp;
-            end            
+            MSTATUS: rf_wdata_o = mstatus ;
+            MTVEC: rf_wdata_o = mtvec;
+            MCAUSE: rf_wdata_o = mcause;
+            MIP: rf_wdata_o = mip;
+            MIE: rf_wdata_o = mie;
+            MSCRATCH: rf_wdata_o = mscratch;
+            MEPC: rf_wdata_o = mepc;
+            SATP: rf_wdata_o = satp;           
           endcase
         end
-          
       endcase
     end
     always_comb begin
       priviledge_mode_o = priviledge_mode_reg;
+    end
+    // unsigned imm extention
+    always_comb begin
+      uimm = {27'b0,inst_i[19:15]};
     end
     // always_comb begin
     //   if(priviledge_mode_i == PRIVILEDGE_MODE_U)begin
@@ -149,30 +139,30 @@ module Csr#(
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
               case(inst_i[31:20])
-                MSTATUS:begin
-                  mstatus <= mstatus & ~rf_rdata_a_i;
-                end
-                MTVEC:begin
-                  mtvec <= mtvec & ~rf_rdata_a_i;
-                end
-                MCAUSE:begin
-                  mcause <= mcause & ~rf_rdata_a_i;
-                end
-                MIP:begin
-                  mip <= mip & ~rf_rdata_a_i;
-                end
-                MIE:begin
-                  mie <= mie & ~rf_rdata_a_i;
-                end
-                MSCRATCH:begin
-                  mscratch <= mscratch & ~rf_rdata_a_i;
-                end
-                MEPC:begin
-                  mepc <= mepc & ~rf_rdata_a_i;
-                end 
-                SATP:begin
-                  satp <= satp & ~rf_rdata_a_i;
-                end           
+                MSTATUS: mstatus <= mstatus & ~rf_rdata_a_i;
+                MTVEC: mtvec <= mtvec & ~rf_rdata_a_i;
+                MCAUSE: mcause <= mcause & ~rf_rdata_a_i;
+                MIP: mip <= mip & ~rf_rdata_a_i;
+                MIE: mie <= mie & ~rf_rdata_a_i;
+                MSCRATCH: mscratch <= mscratch & ~rf_rdata_a_i;
+                MEPC: mepc <= mepc & ~rf_rdata_a_i;
+                SATP: satp <= satp & ~rf_rdata_a_i;          
+              endcase
+            end
+          end
+          CSRRCI:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
+            if(inst_i[19:15])begin // only write csr when rs1 is not x0
+              case(inst_i[31:20])
+                MSTATUS: mstatus <= mstatus & ~uimm;
+                MTVEC: mtvec <= mtvec & ~uimm;
+                MCAUSE: mcause <= mcause & ~uimm;
+                MIP: mip <= mip & ~uimm;
+                MIE: mie <= mie & ~uimm;
+                MSCRATCH: mscratch <= mscratch & ~uimm;
+                MEPC: mepc <= mepc & ~uimm;
+                SATP: satp <= satp & ~uimm;    
               endcase
             end
           end
@@ -181,30 +171,30 @@ module Csr#(
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
               case(inst_i[31:20])
-                MSTATUS:begin
-                  mstatus <= mstatus | rf_rdata_a_i;
-                end
-                MTVEC:begin
-                  mtvec <= mtvec | rf_rdata_a_i;
-                end
-                MCAUSE:begin
-                  mcause <= mcause | rf_rdata_a_i;
-                end
-                MIP:begin
-                  mip <= mip | rf_rdata_a_i;
-                end
-                MIE:begin
-                  mie <= mie | rf_rdata_a_i;
-                end
-                MSCRATCH:begin
-                  mscratch <= mscratch | rf_rdata_a_i;
-                end
-                MEPC:begin
-                  mepc <= mepc | rf_rdata_a_i;
-                end
-                SATP:begin
-                  satp <= satp | rf_rdata_a_i;
-                end                
+                MSTATUS: mstatus <= mstatus | rf_rdata_a_i;
+                MTVEC: mtvec <= mtvec | rf_rdata_a_i;
+                MCAUSE: mcause <= mcause | rf_rdata_a_i;
+                MIP: mip <= mip | rf_rdata_a_i;
+                MIE: mie <= mie | rf_rdata_a_i;
+                MSCRATCH: mscratch <= mscratch | rf_rdata_a_i;
+                MEPC: mepc <= mepc | rf_rdata_a_i;
+                SATP: satp <= satp | rf_rdata_a_i;                
+              endcase
+            end
+          end
+          CSRRSI:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
+            if(inst_i[19:15])begin
+              case(inst_i[31:20])
+                MSTATUS: mstatus <= mstatus | uimm;
+                MTVEC: mtvec <= mtvec | uimm;
+                MCAUSE: mcause <= mcause | uimm;
+                MIP: mip <= mip | uimm;
+                MIE: mie <= mie | uimm;
+                MSCRATCH: mscratch <= mscratch | uimm;
+                MEPC: mepc <= mepc | uimm;
+                SATP: satp <= satp | uimm;              
               endcase
             end
           end
@@ -213,30 +203,30 @@ module Csr#(
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
               case(inst_i[31:20])
-                MSTATUS:begin
-                  mstatus <= rf_rdata_a_i ;
-                end
-                MTVEC:begin
-                  mtvec <= rf_rdata_a_i ;
-                end
-                MCAUSE:begin
-                  mcause <= rf_rdata_a_i ;
-                end
-                MIP:begin
-                  mip <= rf_rdata_a_i ;
-                end
-                MIE:begin
-                  mie <= rf_rdata_a_i ;
-                end
-                MSCRATCH:begin
-                  mscratch <= rf_rdata_a_i ;
-                end
-                MEPC:begin
-                  mepc <= rf_rdata_a_i ;
-                end
-                SATP:begin
-                  satp <= rf_rdata_a_i;
-                end           
+                MSTATUS: mstatus <= rf_rdata_a_i;
+                MTVEC: mtvec <= rf_rdata_a_i;
+                MCAUSE: mcause <= rf_rdata_a_i;
+                MIP: mip <= rf_rdata_a_i;
+                MIE: mie <= rf_rdata_a_i;
+                MSCRATCH: mscratch <= rf_rdata_a_i;
+                MEPC: mepc <= rf_rdata_a_i;
+                SATP: satp <= rf_rdata_a_i;           
+              endcase
+            end
+          end
+          CSRRWI:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
+            if(inst_i[19:15])begin
+              case(inst_i[31:20])
+                MSTATUS: mstatus <= uimm;
+                MTVEC: mtvec <= uimm;
+                MCAUSE: mcause <= uimm;
+                MIP: mip <= uimm;
+                MIE: mie <= uimm;
+                MSCRATCH: mscratch <= uimm;
+                MEPC: mepc <= uimm;
+                SATP: satp <= uimm;           
               endcase
             end
           end
