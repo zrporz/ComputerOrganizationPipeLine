@@ -15,8 +15,10 @@ module hazard_controler#(
     input wire exme_rf_wen_i,
     input wire mewb_rf_wen_i,
     input wire use_rs2_i,
-    input wire [ADDR_WIDTH-1:0] pc_branch_nxt_i,
-    input wire [ADDR_WIDTH-1:0] pc_csr_nxt_i,
+    // input wire [ADDR_WIDTH-1:0] pc_branch_nxt_i,
+    input wire pc_branch_nxt_en,
+    // input wire [ADDR_WIDTH-1:0] pc_csr_nxt_i,
+    input wire pc_csr_nxt_en,
     output reg bubble_IF_o,
     output reg bubble_ID_o,
     output reg bubble_EXE_o,
@@ -39,11 +41,11 @@ module hazard_controler#(
       flush_EXE_o = 0;
       flush_MEM_o = 0;
       flush_WB_o = 0;
-      if(pc_csr_nxt_i)begin // Because MEM is rewrite the PC registor, pipeline should be flushed
+      if(pc_csr_nxt_en)begin // Because MEM is rewrite the PC registor, pipeline should be flushed
         flush_IF_o = 1;
         flush_ID_o = 1;
         flush_EXE_o = 1;
-      end else if(pc_branch_nxt_i)begin // Because EXE is rewrite the PC registor, pipeline should be flushed
+      end else if(pc_branch_nxt_en)begin // Because EXE is rewrite the PC registor, pipeline should be flushed
         flush_IF_o = 1;
         flush_ID_o = 1;
       end else begin

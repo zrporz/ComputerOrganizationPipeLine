@@ -11,6 +11,7 @@ module Csr#(
     output reg [DATA_WIDTH-1:0]rf_wdata_o, // rd
     output reg [1:0] priviledge_mode_o,
     output reg [ADDR_WIDTH-1:0] pc_next_o,
+    output reg pc_next_en,
     // mtimer -> cpu -> csr
     input wire mtime_exceed_i,
     // mmu -> cpu -> csr
@@ -76,6 +77,7 @@ module Csr#(
         32'h0000_0013: leds_r = pc_now_i[31:16];
         32'h0000_0014: leds_r = pc_next_o[15:0];
         32'h0000_0015: leds_r = pc_next_o[31:16];
+        32'h0000_0016: leds_r = {15'b0,pc_next_en};
       endcase
 
     end
@@ -137,10 +139,14 @@ module Csr#(
         mip <= 32'b0;
         satp <= 32'b0;
         priviledge_mode_reg <= 2'b11;
+        pc_next_en <= 0;
+        pc_next_o <= 32'b0;
       end else begin
         mip.mtip <= mtime_exceed_i;
         casez(inst_i)
           CSRRC:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
               case(inst_i[31:20])
                 MSTATUS:begin
@@ -171,6 +177,8 @@ module Csr#(
             end
           end
           CSRRS:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
               case(inst_i[31:20])
                 MSTATUS:begin
@@ -201,6 +209,8 @@ module Csr#(
             end
           end
           CSRRW:begin
+            pc_next_en <= 0;
+            pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
               case(inst_i[31:20])
                 MSTATUS:begin
@@ -236,12 +246,14 @@ module Csr#(
             mcause.exception_code <= 31'h3;
             mstatus.mpp <= priviledge_mode_reg;
             priviledge_mode_reg <= PRIVILEDGE_MODE_M;
+            pc_next_en <= 1;
             pc_next_o <= {mtvec[31:2],2'b00};
           end
           ECALL:begin
             mepc <= pc_now_i; // ECALL is a exception, not interruption, thus mepc should save current pc , not pc+4
             mcause.interrupt <= 2'b0;
             mstatus.mpp <= priviledge_mode_reg;
+            pc_next_en <= 1;
             pc_next_o <= {mtvec[31:2],2'b00};
             if(priviledge_mode_reg == PRIVILEDGE_MODE_U)begin // Environment call from user mode
               mcause.exception_code <= 31'h8;
@@ -252,6 +264,7 @@ module Csr#(
             end
           end
           MRET:begin
+            pc_next_en <= 1;
             pc_next_o <= mepc;
             priviledge_mode_reg <= mstatus.mpp;
             mie.mtie <= 1'b1;
@@ -263,11 +276,13 @@ module Csr#(
                 mie.mtie <= 0; // unable the mtie, otherwise pc will stuck in mtvec
                 mcause.interrupt <= 1'b1;
                 mepc <= pc_now_i + 4;
+                pc_next_en <= 1;
                 pc_next_o <= {mtvec[31:2],2'b00};
                 mcause.exception_code <= 31'h7;
                 mstatus.mpp <= PRIVILEDGE_MODE_U;
                 priviledge_mode_reg <= PRIVILEDGE_MODE_M;
               end else begin
+                pc_next_en <= 0;
                 pc_next_o <= 32'b0;
               end
               // else if(priviledge_mode_i == PRIVILEDGE_MODE_M)begin
@@ -280,6 +295,7 @@ module Csr#(
               //   pc_next_o <= {mtvec[31:2],2'b00};
               // end
             end else begin
+              pc_next_en <= 0;
               pc_next_o <= 32'b0;
             end 
           end

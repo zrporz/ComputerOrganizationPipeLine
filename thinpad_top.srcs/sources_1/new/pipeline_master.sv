@@ -79,12 +79,16 @@ module pipeline_master #(
   reg [31:0] pc_branch_nxt;
   reg [31:0] pc_csr_nxt;
   reg [31:0] pc_nxt_reg;
+  reg pc_csr_nxt_en;
+  reg pc_branch_nxt_en;
   logic pc_if_state; //0:IDLE 1:Fetching Instruction
   PcController u_pc_controller(
     .pc_i(pc_reg),
     .pc_seq_nxt_i(pc_seq_nxt),
     .pc_branch_nxt_i(pc_branch_nxt),
+    .pc_branch_nxt_en(pc_branch_nxt_en),
     .pc_csr_nxt_i(pc_csr_nxt),
+    .pc_csr_nxt_en(pc_csr_nxt_en),
     .pc_nxt_o(pc_nxt_reg)
   );
   /*=========== PC Controller Module End ===========*/
@@ -288,8 +292,8 @@ module pipeline_master #(
     .idex_rf_wen_i(idex_rf_wen),
     .exme_rf_wen_i(exme_rf_wen),
     .mewb_rf_wen_i(mewb_rf_wen),
-    .pc_branch_nxt_i(pc_branch_nxt),
-    .pc_csr_nxt_i(pc_csr_nxt),
+    .pc_branch_nxt_en(pc_branch_nxt_en),
+    .pc_csr_nxt_en(pc_csr_nxt_en),
     .use_rs2_i(use_rs2),
     .bubble_IF_o(bubble_IF),
     .bubble_ID_o(bubble_ID),
@@ -488,6 +492,7 @@ module pipeline_master #(
     .priviledge_mode_o(priviledge_mode_o),
     .pc_now_i(exme_pc_now_reg),
     .pc_next_o(pc_csr_nxt),
+    .pc_next_en(pc_csr_nxt_en),
     .mtime_exceed_i(mtime_exceed_i),
     .satp_o(satp_o),
     .leds(leds),
@@ -510,6 +515,7 @@ module pipeline_master #(
       // reset every reg stage to addi x0, x0, 0
 
       // -IF
+      pc_branch_nxt_en <= 0;
       pc_reg <= 32'h8000_0000;
       wb0_stb_o <= 1'b0;
       wb0_cyc_o <= 1'b0;
@@ -667,8 +673,8 @@ module pipeline_master #(
         case(ifid_inst_reg[6:0])
           LUI:begin // do nothing
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�????, �????级一级传下去
-            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�????
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�?????, �?????级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�?????
           end
           BEQ_BNE:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
@@ -814,6 +820,7 @@ module pipeline_master #(
               exme_alu_result_reg <= idex_imm_gen_reg;
             end
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt_en <= 0;
             pc_branch_nxt <= 32'b0;
           end
           R_TYPE: begin
@@ -821,20 +828,24 @@ module pipeline_master #(
             exme_rf_wen <= idex_rf_wen;
             if(idex_inst_reg[6:0] == JALR)begin
               // exme_rpc_wen <= 1;
+              pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
             end
             else begin
+              pc_branch_nxt_en <= 0;
               pc_branch_nxt <= 32'b0;
             end
           end
           I_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt_en <= 0;
             pc_branch_nxt <= 32'b0;
           end
           S_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt_en <= 0;
             pc_branch_nxt <= 32'b0;
           end
           B_TYPE: begin
@@ -842,9 +853,11 @@ module pipeline_master #(
             exme_rf_wen <= idex_rf_wen;
             if((idex_inst_reg[12] && idex_rf_rdata_a_reg != idex_rf_rdata_b_reg ) || (!idex_inst_reg[12] && idex_rf_rdata_a_reg == idex_rf_rdata_b_reg ))begin
               // exme_rpc_wen <= 1;
+              pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
             end
             else begin
+              pc_branch_nxt_en <= 0;
               pc_branch_nxt <= 32'b0;
               // exme_rpc_wen <= 0;
             end
@@ -853,11 +866,13 @@ module pipeline_master #(
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
             // exme_rpc_wen <= 1;
+            pc_branch_nxt_en <= 1;
             pc_branch_nxt <= alu_result_i;
           end
           default:begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
+            pc_branch_nxt_en <= 0;
             pc_branch_nxt <= 32'b0;
           end
         endcase
