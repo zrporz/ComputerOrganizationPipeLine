@@ -45,11 +45,11 @@ module pipeline_master #(
   // NOTE
   typedef enum logic [6:0] {
     LUI = 7'b0110111,
-    BEQ_BNE = 7'b1100011,
-    LB_LW = 7'b0000011,
-    SB_SW = 7'b0100011, // SB or SW
-    ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ = 7'b0010011, // ADDI or ANDI, CLZ, CTZ
-    ADD_OR_AND_XOR_MINU_SLTU = 7'b0110011, // 这里之后增加 MINU,SLTU
+    BEQ_BNE_BLT_BGE_BLTU_BGTU = 7'b1100011,
+    LB_LW_LH_LBU_LHU = 7'b0000011,
+    SB_SW_SH = 7'b0100011, 
+    ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ_SLTI_SLTIU_XORI_SRAI = 7'b0010011, 
+    ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA = 7'b0110011, 
     JAL = 7'b1101111,
     JALR = 7'b1100111,
     AUIPC = 7'b0010111,
@@ -70,7 +70,8 @@ module pipeline_master #(
     ALU_CLZ = 4'b1011,
     ALU_CTZ = 4'b1100,
     ALU_MINU = 4'b1101,
-    ALU_LTU = 4'b1110
+    ALU_LTU = 4'b1110,
+    ALU_LT = 4'b1111
   } op_type_t;
   // before IF reg
   /*=========== PC Controller Module Begin ===========*/
@@ -185,7 +186,7 @@ module pipeline_master #(
         imm_gen_inst_o = {ifid_inst_reg[31:12],12'b0};
         use_rs2 = 0;
       end 
-      BEQ_BNE:begin
+      BEQ_BNE_BLT_BGE_BLTU_BGTU:begin
         imm_gen_type_o = B_TYPE;
         use_rs2 = 1;
         if(ifid_inst_reg[31])begin
@@ -198,7 +199,7 @@ module pipeline_master #(
         // imm_gen_inst_o[4:1] = inst_reg[11:8];
         // imm_gen_inst_o[11] = inst_reg[7];
       end
-      LB_LW:begin // imm 做有符号扩展
+      LB_LW_LH_LBU_LHU:begin // imm 做有符号扩展
         use_rs2 = 0;
         imm_gen_type_o = I_TYPE;
         imm_gen_inst_o[11:0] = ifid_inst_reg[31:20];
@@ -208,7 +209,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      SB_SW:begin
+      SB_SW_SH:begin
         use_rs2 = 1;
         imm_gen_type_o = S_TYPE;
         imm_gen_inst_o[11:5] = ifid_inst_reg[31:25];
@@ -219,7 +220,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ:begin
+      ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ_SLTI_SLTIU_XORI_SRAI:begin
         use_rs2 = 0;
         imm_gen_type_o = I_TYPE;
         imm_gen_inst_o[11:0] = ifid_inst_reg[31:20];
@@ -229,7 +230,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADD_OR_AND_XOR_MINU_SLTU:begin
+      ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin
         use_rs2 = 1;
         imm_gen_type_o = R_TYPE;
         imm_gen_inst_o = 0;
@@ -676,31 +677,37 @@ module pipeline_master #(
             idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�?????, �?????级一级传下去
             idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�?????
           end
-          BEQ_BNE:begin // PC+imm
+          BEQ_BNE_BLT_BGE_BLTU_BGTU:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
             idex_rf_wen <= 0;
           end
-          LB_LW:begin // PC+imm
+          LB_LW_LH_LBU_LHU:begin // PC+imm
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 1;
             idex_rf_wen <= 1;
           end
-          SB_SW:begin // rs1+imm
+          SB_SW_SH:begin // rs1+imm
             
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 1;
             idex_rf_wen <= 0;
           end
-          ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ:begin // rs1+imm
+          ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ_SLTI_SLTIU_XORI_SRAI:begin // rs1+imm
             idex_rf_wen <= 1;
             idex_mem_en <= 0;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
+              3'b010:idex_alu_op_reg <= ALU_LT;     // SLTI
+              3'b011:idex_alu_op_reg <= ALU_LTU;    // SLTIU
               3'b111:idex_alu_op_reg <= ALU_AND;
               3'b110:idex_alu_op_reg <= ALU_OR;
-              // 3'b001:idex_alu_op_reg <= ALU_SLL;
-              3'b101:idex_alu_op_reg <= ALU_SRL;
+              3'b101:
+                if (ifid_inst_reg[30]) begin
+                  idex_alu_op_reg <= ALU_SRA;
+                end else begin
+                  idex_alu_op_reg <= ALU_SRL;
+                end
               3'b001:
                 if (ifid_inst_reg[31:25] == 7'b0000000) begin
                   idex_alu_op_reg <= ALU_SLL;
@@ -712,9 +719,10 @@ module pipeline_master #(
                     idex_alu_op_reg <= ALU_CTZ;
                   end
                 end
+              3'b100:idex_alu_op_reg <= ALU_XOR;   // XORI
             endcase
           end
-          ADD_OR_AND_XOR_MINU_SLTU:begin // rs1+rs2
+          ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin // rs1+rs2
             idex_rf_wen <= 1;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
@@ -731,6 +739,15 @@ module pipeline_master #(
               end
 
               3'b100:idex_alu_op_reg <= ALU_XOR;
+              3'b010:idex_alu_op_reg <= ALU_LT;
+              3'b001:idex_alu_op_reg <= ALU_SLL; // SLL
+              3'b101:begin
+                if (ifid_inst_reg[30]) begin
+                  idex_alu_op_reg <= ALU_SRA;
+                end else begin
+                  idex_alu_op_reg <= ALU_SRL;
+                end
+              end
             endcase
             idex_mem_en <= 0;
           end
@@ -851,12 +868,32 @@ module pipeline_master #(
           B_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            if((idex_inst_reg[12] && idex_rf_rdata_a_reg != idex_rf_rdata_b_reg ) || (!idex_inst_reg[12] && idex_rf_rdata_a_reg == idex_rf_rdata_b_reg ))begin
+            if ((idex_inst_reg[14:12] == 3'b001) && idex_rf_rdata_a_reg != idex_rf_rdata_b_reg ) begin
+              // BNE
               // exme_rpc_wen <= 1;
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
-            end
-            else begin
+            end else if ((idex_inst_reg[14:12] == 3'b000) && idex_rf_rdata_a_reg == idex_rf_rdata_b_reg ) begin
+              // BEQ
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= alu_result_i;
+            end else if ((idex_inst_reg[14:12] == 3'b100) && ($signed(idex_rf_rdata_a_reg) < $signed(idex_rf_rdata_b_reg))) begin
+              // BLT
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= alu_result_i;
+            end else if ((idex_inst_reg[14:12] == 3'b101) && !($signed(idex_rf_rdata_a_reg) < $signed(idex_rf_rdata_b_reg))) begin
+              // BGE
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= alu_result_i;
+            end else if ((idex_inst_reg[14:12] == 3'b110) && (idex_rf_rdata_a_reg < idex_rf_rdata_b_reg)) begin
+              // BLTU
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= alu_result_i;
+            end else if ((idex_inst_reg[14:12] == 3'b111) && !(idex_rf_rdata_a_reg < idex_rf_rdata_b_reg)) begin
+              // BGEU
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= alu_result_i;
+            end else begin
               pc_branch_nxt_en <= 0;
               pc_branch_nxt <= 32'b0;
               // exme_rpc_wen <= 0;
@@ -924,8 +961,36 @@ module pipeline_master #(
               exme_inst_reg_copy <= exme_inst_reg;
               exme_bias <= 2'b0;
               case(exme_inst_reg_copy[6:0])
-                LB_LW: begin
+                LB_LW_LH_LBU_LHU: begin
                   if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
+                    // 进行符号位扩展
+                    if(exme_bias[1:0]==2'b0) begin
+                      if (wb1_dat_i[7]) begin
+                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[7:0]};
+                      end else begin
+                        mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
+                      end
+                    end else if(exme_bias[1:0]==2'b01) begin
+                      if (wb1_dat_i[15]) begin
+                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[15:8]};
+                      end else begin
+                        mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
+                      end
+                    end else if(exme_bias[1:0]==2'b10) begin
+                      if (wb1_dat_i[23]) begin
+                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[23:16]};
+                      end else begin 
+                        mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
+                      end
+                    end else begin
+                      if (wb1_dat_i[31]) begin
+                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[31:24]};
+                      end else begin
+                        mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
+                      end
+                    end
+                  end else if(exme_inst_reg_copy[14:12] == 3'b100) begin
+                    // LBU, 零扩展
                     if(exme_bias[1:0]==2'b0) begin
                       mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
                     end else if(exme_bias[1:0]==2'b01) begin
@@ -934,6 +999,28 @@ module pipeline_master #(
                       mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
                     end else begin
                       mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
+                    end
+                  end else if(exme_inst_reg_copy[14:12] == 3'b001)begin
+                    // LH, 符号位扩展
+                    if(exme_bias[1:0]==2'b0) begin
+                      if (wb1_dat_i[15]) begin
+                        mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[15:0]};
+                      end else begin
+                        mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
+                      end
+                    end else begin
+                      if (wb1_dat_i[31]) begin
+                        mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[31:16]};
+                      end else begin
+                        mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[31:16]};
+                      end
+                    end
+                  end else if(exme_inst_reg_copy[14:12] == 3'b101)begin
+                    // LHU, 零扩展
+                    if(exme_bias[1:0]==2'b0) begin
+                      mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
+                    end else begin
+                      mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[31:16]};
                     end
                   end else begin //LW
                     mewb_rf_wdata_reg <= wb1_dat_i;
@@ -953,26 +1040,59 @@ module pipeline_master #(
 
               // NOTE
               case(exme_inst_reg[6:0])
-                LB_LW: begin
+                LB_LW_LH_LBU_LHU: begin
                   wb1_we_o <= 1'b0;
-                  if(exme_inst_reg[14:12] == 3'b000)begin //LB
-                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
+                  if((exme_inst_reg[14:12] == 3'b000) || (exme_inst_reg[14:12] == 3'b100))begin //LB, LBU
+                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);  // 左移 0,1,2,3 位
                     // wb1_sel_o <= 4'b0001;
+                  end else if ((exme_inst_reg[14:12] == 3'b001) || (exme_inst_reg[14:12] == 3'b101)) begin
+                    // LH, LHU
+                    if(exme_alu_result_reg[1:0]==2'b0) begin
+                      wb1_sel_o <= 4'b0011;
+                    end else begin
+                      wb1_sel_o <= 4'b1100;
+                    end
                   end else if(exme_inst_reg[14:12] == 3'b010) begin //LW
                     wb1_sel_o <= 4'b1111;
                   end else begin
                     wb1_sel_o <= 4'b0000;
                   end
                 end
-                SB_SW: begin
+                SB_SW_SH: begin
                   if(exme_inst_reg[14:12] == 3'b000)begin //SB
-                    wb1_dat_o <= exme_rf_rdata_b_reg;
+                    // wb1_dat_o <= exme_rf_rdata_b_reg;
+
+                    if (exme_alu_result_reg[1:0] == 2'b00) begin
+                      wb1_dat_o <= exme_rf_rdata_b_reg;
+                    end else if (exme_alu_result_reg[1:0] == 2'b01) begin
+                      wb1_dat_o <= (exme_rf_rdata_b_reg << 8);
+                    end else if (exme_alu_result_reg[1:0] == 2'b10) begin
+                      wb1_dat_o <= (exme_rf_rdata_b_reg << 16);
+                    end else begin
+                      wb1_dat_o <= (exme_rf_rdata_b_reg << 24);
+                    end
+
                     wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);
                     // wb1_sel_o <= 4'b0001;
                     wb1_we_o <= 1'b1;
                   end else if(exme_inst_reg[14:12] == 3'b010)begin //SW
                     wb1_dat_o <= exme_rf_rdata_b_reg;
                     wb1_sel_o <= 4'b1111;
+                    wb1_we_o <= 1'b1;
+                  end else if(exme_inst_reg[14:12] == 3'b001)begin  // SH
+                    // wb1_dat_o <= exme_rf_rdata_b_reg;
+
+                    if (exme_alu_result_reg[1:0] == 2'b00) begin
+                      wb1_dat_o <= exme_rf_rdata_b_reg;
+                    end else begin
+                      wb1_dat_o <= (exme_rf_rdata_b_reg << 16);
+                    end
+
+                    if (exme_alu_result_reg[1:0] == 2'b00)begin
+                      wb1_sel_o <= 4'b0011;
+                    end else begin
+                      wb1_sel_o <= 4'b1100;
+                    end
                     wb1_we_o <= 1'b1;
                   end else begin
                     wb1_dat_o <= 0;
