@@ -266,6 +266,16 @@ module thinpad_top (
   logic [ 3:0] mmu_mem_sel_o;
   logic        mmu_mem_we_o;
 
+  logic        query_wen;
+
+  // mmu exception output
+  logic [30:0] if_exception_code;
+  logic [30:0] mem_exception_code;
+  logic [31:0] if_exception_addr;  // VA
+  logic [31:0] mem_exception_addr; // VA
+  logic [31:0] id_exception_instr;
+  logic id_exception_instr_wen;
+
   pipeline_master lab6_master(
       .clk_i(sys_clk),
       .rst_i(sys_rst),
@@ -294,7 +304,17 @@ module thinpad_top (
       .priviledge_mode_o(priviledge_mode_o),
       // DEBUG
       .dip_sw(dip_sw),
-      .leds(leds)
+      .leds(leds),
+      // for mmu exception
+      .exme_rf_wen(query_wen),
+
+      // mmu page fault exception input
+      .if_exception_code_i(if_exception_code),
+      .if_exception_addr_i(if_exception_addr),
+      .mem_exception_code_i(mem_exception_code),
+      .mem_exception_addr_i(mem_exception_addr),
+      .id_exception_instr_i(id_exception_instr),
+      .id_exception_instr_wen(id_exception_instr_wen)
   );
   
   /* =========== MMU begin ===================*/
@@ -325,7 +345,17 @@ module thinpad_top (
     // mode
     .mode_in(priviledge_mode_o),
     // satp
-    .satp_in(satp_o)
+    .satp_in(satp_o),
+
+    // mmu_if or mmu_em
+    .is_if_mmu(1'b1),
+    .query_wen(1'b0),
+
+    // exception output
+    .tlb_exception_code(if_exception_code),
+    .if_exception_addr_o(if_exception_addr),
+    .id_exception_instr_i(id_exception_instr),
+    .id_exception_instr_wen(id_exception_instr_wen)
   );
 
     /* =========== MMU begin ===================*/
@@ -356,7 +386,15 @@ module thinpad_top (
     // mode
     .mode_in(priviledge_mode_o),
     // satp
-    .satp_in(satp_o)
+    .satp_in(satp_o),
+
+    // mmu_if or mmu_em
+    .is_if_mmu(1'b0),
+    .query_wen(query_wen),
+
+    // exception output
+    .tlb_exception_code(mem_exception_code),
+    .mem_exception_addr_o(mem_exception_addr)
   );
 
   /* =========== Lab5 MUX begin =========== */

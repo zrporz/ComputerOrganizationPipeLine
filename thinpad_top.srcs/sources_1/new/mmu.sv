@@ -34,7 +34,20 @@ module mmu #(
     // mode
     input wire[1:0] mode_in,
     // satp
-    input satp_t satp_in
+    input satp_t satp_in,
+
+    // mmu_if or mmu_em
+    input wire is_if_mmu,
+    // query write enable
+    input wire query_wen,
+
+    // tlb -> mmu, for exception
+    output logic tlb_exception,
+    output logic [30:0] tlb_exception_code,
+    output logic[ADDR_WIDTH-1:0] if_exception_addr_o,  // VA
+    output logic[ADDR_WIDTH-1:0] mem_exception_addr_o, // VA
+    output logic[DATA_WIDTH-1:0] id_exception_instr_i,
+    output logic id_exception_instr_wen
 );
 
 logic page_table_en; 
@@ -69,7 +82,8 @@ satp_t tlb_satp_out;
 logic tlb_translate_ack;
 pte_t tlb_translate_in;
 
-
+// for exception
+logic translation_exception;
 
 typedef enum logic [3:0] { 
     DEVICE_SRAM,
@@ -82,7 +96,7 @@ typedef enum logic [3:0] {
 device_t device;
 
 // 状�?�机
-typedef enum logic [3:0] {
+typedef enum logic [4:0] {
     STATE_INIT = 0,
     STATE_READ_1 = 1,
     STATE_WAIT_1 = 2,
@@ -91,7 +105,8 @@ typedef enum logic [3:0] {
     STATE_PPN_ACTION = 5,
     STATE_PPN_WAIT = 6,
     STATE_TLB_ACTION = 7,
-    STATE_TLB_WAIT = 8
+    STATE_TLB_WAIT = 8,
+    STATE_ERROR = 9
 } state_p;
 state_p page_table_state;
 
@@ -155,6 +170,8 @@ logic [ADDR_WIDTH-1:0] last_master_addr_in;
 logic same_master_addr_in;
 assign same_master_addr_in = (last_master_addr_in == master_addr_in);
 
+assign translation_exception = (page_table_state == STATE_ERROR);
+
 always_ff @ (posedge clk) begin
     if (rst) begin
         // 如果�? reset, 就全部置�? 0
@@ -208,7 +225,16 @@ always_ff @ (posedge clk) begin
                     end
 
                     STATE_WAIT_1: begin
-                        page_table_state <=  STATE_READ_2;
+                        // check pte_1, add STATE_ERROR
+                        // V: pte_1[0]
+                        // R: pte_1[1]
+                        // W: pte_1[2]
+                        
+                        if ((~pte_1[0]) || (~pte_1[1] && pte_1[2])) begin
+                            page_table_state <= STATE_ERROR;
+                        end else begin
+                            page_table_state <=  STATE_READ_2;
+                        end
                     end
 
                     STATE_READ_2 : begin
@@ -235,6 +261,10 @@ always_ff @ (posedge clk) begin
                     end
 
                     STATE_PPN_WAIT: begin
+                        page_table_state <= STATE_INIT;
+                    end
+
+                    STATE_ERROR: begin
                         page_table_state <= STATE_INIT;
                     end
                 endcase
@@ -361,6 +391,15 @@ always_comb begin
                 master_ack_out = 1;
                 master_data_out = master_return_data_out;
             end
+            STATE_ERROR: begin
+                mux_addr_out = 0;
+                mux_data_out = 0;
+                mux_we_out = 0;
+                mux_sel_out = 0;
+                mux_stb_out = 0;
+                master_data_out = 0;
+                master_ack_out = 0;
+            end
         endcase
     end
 end
@@ -384,7 +423,19 @@ mmu_tlb TLB(
     .satp_out(tlb_satp_out),
 
     .translate_ack(tlb_translate_ack),
-    .translate_pte_in(tlb_translate_in)
+    .translate_pte_in(tlb_translate_in),
+
+    .tlb_is_mmu_if(is_if_mmu),
+    .mux_we_out(mux_we_out),
+    .translation_exception(translation_exception),
+    .query_wen(query_wen),
+
+    .tlb_exception(tlb_exception),
+    .tlb_exception_code(tlb_exception_code),
+    .if_exception_addr_o(if_exception_addr_o),
+    .mem_exception_addr_o(mem_exception_addr_o),
+    .id_exception_instr_i(id_exception_instr_i),
+    .id_exception_instr_wen(id_exception_instr_wen)
 );
 
     

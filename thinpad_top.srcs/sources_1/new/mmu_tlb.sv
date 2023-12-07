@@ -8,7 +8,7 @@ module mmu_tlb #(
     input wire rst,
 
     // CPU to TLB
-    input wire [1:0] mode_in,
+    input wire [1:0] mode_in,   // 这个应该就是 priviledge mode
     input satp_t satp_in,
     input wire query_en,
     input wire [ADDR_WIDTH-1:0] query_addr,
@@ -24,7 +24,20 @@ module mmu_tlb #(
 
     // MMU to TLB
     input wire translate_ack,
-    input pte_t translate_pte_in
+    input pte_t translate_pte_in,
+
+    // exception
+    input wire tlb_is_mmu_if,   // mmu_if or mmu_em
+    output logic tlb_exception,
+    output logic [30:0] tlb_exception_code,
+    input wire mux_we_out,      // no use
+    output logic[ADDR_WIDTH-1:0] if_exception_addr_o,  // VA
+    output logic[ADDR_WIDTH-1:0] mem_exception_addr_o, // VA
+    input wire translation_exception,
+    input wire query_wen,      // whether to write 
+    output logic[DATA_WIDTH-1:0] id_exception_instr_i,
+    output logic id_exception_instr_wen
+
 );
 
     tlbe_t tlb [31:0];
@@ -143,6 +156,66 @@ module mmu_tlb #(
                 };
             end
         end
+    end
+
+
+    // for exception
+
+    // tlbe.pte: {2'b00, query_addr[31:12], rsw, 8'b00001111}
+    //                                              DAGUXWRV
+    // V: tlbe.pte[0]
+    // R: tlbe.pte[1]
+    // W: tlbe.pte[2]
+    // X: tlbe.pte[3]
+
+    always_comb begin
+
+        // init
+        if_exception_addr_o = 0;
+        mem_exception_addr_o = 0;
+        id_exception_instr_i = 0;
+        id_exception_instr_wen = 0;
+
+
+        if (~query_en) begin     // no query -> no exception
+            tlb_exception = 0;
+            tlb_exception_code = 0;
+        end else if (tlb_is_mmu_if & translation_exception) begin
+            tlb_exception = 1;
+            tlb_exception_code = `INSTRUCTION_PAGE_FAULT;
+            if_exception_addr_o = query_addr;
+            // set id exception information
+            id_exception_instr_i = 32'b0010011;
+            id_exception_instr_wen = 0;
+        end else if (~tlb_is_mmu_if & translation_exception & ~query_wen) begin
+            tlb_exception = 1;
+            tlb_exception_code = `LOAD_PAGE_FAULT;
+            mem_exception_addr_o = query_addr;
+        end else if (~tlb_is_mmu_if & translation_exception & query_wen) begin
+            tlb_exception = 1;
+            tlb_exception_code = `STORE_PAGE_FAULT;
+            mem_exception_addr_o = query_addr;
+        end else if ( tlb_is_mmu_if & hit_tlb & (~tlbe.pte[0] | ~tlbe.pte[3])) begin
+            tlb_exception = 1;
+            tlb_exception_code = `INSTRUCTION_PAGE_FAULT;
+            if_exception_addr_o = query_addr;
+            // set id exception information
+            id_exception_instr_i = 32'b0010011;
+            id_exception_instr_wen = 0;
+        end else if ( ~tlb_is_mmu_if & hit_tlb & ~query_wen & (~tlbe.pte[0] | ~tlbe.pte[1])) begin
+            tlb_exception = 1;
+            tlb_exception_code = `LOAD_PAGE_FAULT;
+            mem_exception_addr_o = query_addr;
+        end else if ( ~tlb_is_mmu_if & hit_tlb & query_wen & (~tlbe.pte[0] | ~tlbe.pte[2])) begin
+            tlb_exception = 1;
+            tlb_exception_code = `STORE_PAGE_FAULT;
+            mem_exception_addr_o = query_addr;
+        end else begin          // query and no exception
+            tlb_exception = 0;
+            tlb_exception_code = 0;
+        end
+
+        // TODO: priviledge mode
     end
 
 
