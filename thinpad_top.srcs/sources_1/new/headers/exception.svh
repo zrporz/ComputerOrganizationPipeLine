@@ -12,7 +12,11 @@ typedef enum logic[1:0] {
 // `define PRIVILEDGE_MODE_S 2'b01 // SUPERVISOR MODE
 // `define PRIVILEDGE_MODE_R 2'b10 // RESERVED MODE
 // `define PRIVILEDGE_MODE_M 2'b11 // MACHINE MODE
-
+// Refer https://c-yongheng.github.io/2022/07/30/riscv-privileged-spec/
+`define MSTATUS_MASK 32'b1000_0000_0111_1111_1111_1111_1110_1010
+`define SSTATUS_MASK 32'b1000_0000_0000_1101_1110_0111_0110_0010
+`define SIE_MASK 32'b0000_0000_0000_0000_0000_0011_0011_0011
+`define SIP_MASK 32'b0000_0000_0000_0000_0000_0011_0011_0011
 typedef struct packed {
     logic [`MXLEN-3:0] base;
     logic [1:0] mode;
@@ -30,6 +34,8 @@ typedef logic[`MXLEN-1:0] mideleg_t;
 typedef logic[`MXLEN-1:0] medeleg_t;
 typedef logic[`MXLEN-1:0] mtval_t;
 typedef logic[`MXLEN-1:0] stval_t;
+typedef logic[`MXLEN-1:0] pmpaddr0_t;
+typedef logic[`MXLEN-1:0] pmpcfg0_t;
 typedef struct packed {
     logic interrupt;
     logic[`MXLEN-2:0] exception_code;
@@ -44,23 +50,15 @@ typedef struct packed {
     logic tsr, tw, tvm, mxr, sum, mprv;
     logic[1:0] xs, fs, mpp, trash_1;
     logic spp, mpie, trash_2, spie, upie, mie, trash_3, sie, uie;
-} mstatus_t;
+} msstatus_t; // mstatus and sstatus share one register
 typedef struct packed {
     logic[`MXLEN-13:0] trash_0;
     logic meie, trash_1, seie, ueie, mtie, trash_2, stie, utie, msie, trash_3, ssie, usie;
-} mie_t;
-typedef struct packed {
-    logic[`MXLEN-13:0] trash_0;
-    logic meie, trash_1, seie, ueie, mtie, trash_2, stie, utie, msie, trash_3, ssie, usie;
-} sie_t;
+} msie_t; // mie and sie share one register
 typedef struct packed {
     logic[`MXLEN-13:0] trash_0;
     logic meip, trash_1, seip, ueip, mtip, trash_2, stip, utip, msip, trash_3, ssip, usip;
-} mip_t;
-typedef struct packed {
-    logic[`MXLEN-13:0] trash_0;
-    logic meip, trash_1, seip, ueip, mtip, trash_2, stip, utip, msip, trash_3, ssip, usip;
-} sip_t;
+} msip_t; // mip and sip share one register
 typedef struct packed {
     logic mode;
     logic [8:0] asid;
