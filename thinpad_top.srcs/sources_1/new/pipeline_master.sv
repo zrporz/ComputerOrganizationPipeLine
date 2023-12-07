@@ -29,7 +29,17 @@ module pipeline_master #(
     output wire [15:0] leds,
     // mmu<-cpu<-csr
     output wire [31:0] satp_o,
-    output wire[1:0]  priviledge_mode_o
+    output wire[1:0]  priviledge_mode_o,
+
+    output reg exme_rf_wen,
+
+    // input for page fault exception
+    input wire [30:0] if_exception_code_i,
+    input wire [ADDR_WIDTH-1:0] if_exception_addr_i,  // VA
+    input wire [30:0] mem_exception_code_i,
+    input wire [ADDR_WIDTH-1:0] mem_exception_addr_i, // VA
+    input wire [DATA_WIDTH-1:0] id_exception_instr_i,
+    input wire id_exception_instr_wen
 );
 
   typedef enum logic [2:0] { 
@@ -123,7 +133,7 @@ module pipeline_master #(
   reg exme_use_rs2;
   reg[31:0] exme_pc_now_reg;
   instrction_type_t exme_instr_type_reg;
-  reg exme_rf_wen;
+  // reg exme_rf_wen;
   reg exme_state; // this reg just use to store the state of mem_state, not pass down
   reg[1:0] exme_bias; //same to above, save for lb
   reg[31:0] exme_inst_reg_copy;
