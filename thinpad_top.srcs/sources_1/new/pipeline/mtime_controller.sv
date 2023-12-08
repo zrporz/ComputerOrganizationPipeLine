@@ -17,11 +17,17 @@ module MtimeController #(
     input wire wb_we_i,
 
     // mtimer --> csr
-    output reg mtime_exceed_o
+    output reg mtime_exceed_o,
+    output reg [31:0] mtime_lo_o,
+    output reg [31:0] mtime_hi_o
 );
     reg[64:0] mtime_reg;
     reg[64:0] mtimecmp_reg;
     logic state;
+    always_comb begin
+      mtime_lo_o = mtime_reg[31:0];
+      mtime_hi_o = mtime_reg[63:32];
+    end
     always_ff @ (posedge clk_i) begin
       if (rst_i) begin
         state <= 1;

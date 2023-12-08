@@ -266,7 +266,7 @@ module thinpad_top (
   logic [ 3:0] mmu_mem_sel_o;
   logic        mmu_mem_we_o;
 
-  logic        query_wen;
+  // logic        query_wen;
 
   // mmu exception output
   logic [30:0] if_exception_code;
@@ -299,6 +299,8 @@ module thinpad_top (
       .wb1_we_o (mmu_mem_we_o),
       // mtimer->cpu
       .mtime_exceed_i(mtime_exceed_o),
+      .mtime_lo_i(mtime_lo_o),
+      .mtime_hi_i(mtime_hi_o),
       // mmu<-cpu<-csr
       .satp_o(satp_o),
       .priviledge_mode_o(priviledge_mode_o),
@@ -306,7 +308,7 @@ module thinpad_top (
       .dip_sw(dip_sw),
       .leds(leds),
       // for mmu exception
-      .exme_rf_wen(query_wen),
+      // .exme_rf_wen(query_wen),
 
       // mmu page fault exception input
       .if_exception_code_i(if_exception_code),
@@ -390,7 +392,7 @@ module thinpad_top (
 
     // mmu_if or mmu_em
     .is_if_mmu(1'b0),
-    .query_wen(query_wen),
+    .query_wen(mmu_mem_we_o),
 
     // exception output
     .tlb_exception_code(mem_exception_code),
@@ -922,6 +924,8 @@ module thinpad_top (
   );
   // Mtime Module
   wire mtime_exceed_o;
+  wire[31:0] mtime_lo_o;
+  wire[31:0] mtime_hi_o;
   MtimeController u_mtimer_controller(
       .clk_i(sys_clk),
       .rst_i(sys_rst),
@@ -936,7 +940,9 @@ module thinpad_top (
       .wb_we_i (wbs3_we_o),
 
       // mtimer -> csr
-      .mtime_exceed_o(mtime_exceed_o)
+      .mtime_exceed_o(mtime_exceed_o),
+      .mtime_lo_o(mtime_lo_o),
+      .mtime_hi_o(mtime_hi_o)
   );
   /* =========== Lab5 Slaves end =========== */
 endmodule

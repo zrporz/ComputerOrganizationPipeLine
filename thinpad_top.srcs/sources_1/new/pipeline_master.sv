@@ -25,13 +25,15 @@ module pipeline_master #(
     output reg [DATA_WIDTH/8-1:0] wb1_sel_o,
     output reg wb1_we_o,
     input wire mtime_exceed_i,
+    input wire[DATA_WIDTH-1:0] mtime_lo_i,
+    input wire[DATA_WIDTH-1:0] mtime_hi_i,
     input wire [31:0] dip_sw,
     output wire [15:0] leds,
     // mmu<-cpu<-csr
     output wire [31:0] satp_o,
     output wire[1:0]  priviledge_mode_o,
 
-    output reg exme_rf_wen,
+    // output reg exme_rf_wen,
 
     // input for page fault exception
     input wire [30:0] if_exception_code_i,
@@ -59,11 +61,11 @@ module pipeline_master #(
     LB_LW_LH_LBU_LHU = 7'b0000011,
     SB_SW_SH = 7'b0100011, 
     ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ_SLTI_SLTIU_XORI_SRAI = 7'b0010011, 
-    ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA = 7'b0110011, 
+    ADD_SUB_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA = 7'b0110011, 
     JAL = 7'b1101111,
     JALR = 7'b1100111,
     AUIPC = 7'b0010111,
-    CSR_EBREAK_ECALL_MRET = 7'b1110011 // CSR(C,S,W),EBREAK, ECALL, MRET
+    CSR_EBREAK_ECALL_MRET_SRET_SFENCEVMA = 7'b1110011 // CSR(C,S,W),EBREAK, ECALL, MRET, SRET, SFENCE.VMA
   } opcode_type_t;
   typedef enum logic [3:0] {
     ALU_DEFAULT = 4'b0000,
@@ -107,6 +109,7 @@ module pipeline_master #(
   // IF-ID reg
   reg [31:0] ifid_inst_reg;
   reg [31:0] ifid_pc_now_reg;
+  reg [30:0] ifid_if_exception_code_reg;
   instrction_type_t ifid_instr_type_reg;
 
   // ID-EXE reg
@@ -116,6 +119,9 @@ module pipeline_master #(
   reg [4:0] idex_rf_waddr_reg;
   reg [31:0] idex_imm_gen_reg;
   reg [31:0] idex_pc_now_reg;
+  reg [30:0] idex_if_exception_code_reg;
+  reg [31:0] idex_exception_instr_reg;
+  reg idex_exception_instr_wen_reg;
   op_type_t idex_alu_op_reg;
   reg idex_use_rs2;
   reg idex_mem_en;
@@ -128,12 +134,15 @@ module pipeline_master #(
   reg [31:0] exme_rf_rdata_b_reg;
   reg [4:0] exme_rf_waddr_reg;
   reg [31:0] exme_alu_result_reg;
+  reg [30:0] exme_if_exception_code_reg;
+  reg [31:0] exme_exception_instr_reg;
+  reg exme_exception_instr_wen_reg;
   // reg exme_rpc_wen;
   reg exme_mem_en;
   reg exme_use_rs2;
   reg[31:0] exme_pc_now_reg;
   instrction_type_t exme_instr_type_reg;
-  // reg exme_rf_wen;
+  reg exme_rf_wen;
   reg exme_state; // this reg just use to store the state of mem_state, not pass down
   reg[1:0] exme_bias; //same to above, save for lb
   reg[31:0] exme_inst_reg_copy;
@@ -240,7 +249,7 @@ module pipeline_master #(
             imm_gen_inst_o[31:12]=20'h00000;
         end
       end
-      ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin
+      ADD_SUB_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin
         use_rs2 = 1;
         imm_gen_type_o = R_TYPE;
         imm_gen_inst_o = 0;
@@ -250,15 +259,15 @@ module pipeline_master #(
         imm_gen_type_o = J_TYPE;
         imm_gen_inst_o[20:0] = {ifid_inst_reg[31],ifid_inst_reg[19:12],ifid_inst_reg[20],ifid_inst_reg[30:21],1'b0};
         if(ifid_inst_reg[31])begin
-          imm_gen_inst_o[31:12]=20'hFFFFF;
+          imm_gen_inst_o[31:20]=12'hFFF; // zrp is a sb qaq
         end else begin
-          imm_gen_inst_o[31:12]=20'h00000;
+          imm_gen_inst_o[31:21]=12'h000; // zrp is a sb qaq
         end
       end
       JALR:begin
         use_rs2 = 0;
         imm_gen_type_o = R_TYPE;
-        imm_gen_inst_o[20:0] = {ifid_inst_reg[31],ifid_inst_reg[19:12],ifid_inst_reg[20],ifid_inst_reg[30:21],1'b0};
+        imm_gen_inst_o[11:0] = ifid_inst_reg[31:20]; // zrp is a shabi qaq
         if(ifid_inst_reg[31])begin
           imm_gen_inst_o[31:12]=20'hFFFFF;
         end else begin
@@ -270,7 +279,7 @@ module pipeline_master #(
         imm_gen_type_o = U_TYPE;
         imm_gen_inst_o = {ifid_inst_reg[31:12],12'b0};
       end
-      CSR_EBREAK_ECALL_MRET:begin
+      CSR_EBREAK_ECALL_MRET_SRET_SFENCEVMA:begin
         use_rs2 = 0;
         imm_gen_type_o = SYS_TYPE;
         imm_gen_inst_o = 32'b0;
@@ -505,7 +514,18 @@ module pipeline_master #(
     .pc_next_o(pc_csr_nxt),
     .pc_next_en(pc_csr_nxt_en),
     .mtime_exceed_i(mtime_exceed_i),
+    .mtime_i(mtime_lo_i),
+    .mtimeh_i(mtime_hi_i),
     .satp_o(satp_o),
+    // instruciont fetch page fault
+    .if_exception_code_i(exme_if_exception_code_reg),
+    .if_exception_addr_i(exme_pc_now_reg),
+    // mem fetch page fault
+    .mem_exception_code_i(mem_exception_code_i),
+    .mem_exception_addr_i(exme_pc_now_reg),
+    // Illegal instruction
+    .id_exception_instr_i(exme_exception_instr_reg),
+    .id_exception_instr_wen(exme_exception_instr_wen_reg),
     .leds(leds),
     .dip_sw_i(dip_sw)
   );
@@ -537,6 +557,7 @@ module pipeline_master #(
       ifid_inst_reg <= 32'b0010011;
       ifid_pc_now_reg <= 32'h8000_0000;
       ifid_instr_type_reg <= I_TYPE;
+      ifid_if_exception_code_reg <= 31'b0;
 
       // ID-EXE
       idex_inst_reg <= 32'b0010011;
@@ -550,7 +571,11 @@ module pipeline_master #(
       idex_mem_en <= 0;
       idex_instr_type_reg <= I_TYPE;
       idex_rf_wen <= 1; // Never mind whether to allow to read x0, because it will return zero at anytime, thus it doesn't have conflict problem!
+      idex_if_exception_code_reg <= 31'b0;
+      idex_exception_instr_reg <= 31'b0;
+      idex_exception_instr_wen_reg <= 0;
       
+
       // EXE-MEM
       exme_inst_reg <= 32'b0010011;
       exme_rf_rdata_a_reg <= 32'b0;
@@ -567,6 +592,9 @@ module pipeline_master #(
       exme_bias <= 0;
       exme_inst_reg_copy <= 32'b0010011;
       exme_rf_waddr_reg_copy <= 5'b0;
+      exme_if_exception_code_reg <= 31'b0;
+      exme_exception_instr_reg <= 31'b0;
+      exme_exception_instr_wen_reg <= 0;
 
       // MEM-WB
       mewb_rf_wen <= 1;
@@ -588,6 +616,7 @@ module pipeline_master #(
           ifid_inst_reg <= 32'b0010011;
           ifid_pc_now_reg <= 32'h8000_0000;
           ifid_instr_type_reg <= I_TYPE;
+          ifid_if_exception_code_reg <= 31'b0;
           wb0_stb_o <= 1'b0;
           wb0_cyc_o <= 1'b0;
           wb0_we_o <= 1'b0;
@@ -600,6 +629,7 @@ module pipeline_master #(
         ifid_inst_reg <= 32'b0010011;
         ifid_pc_now_reg <= 32'h8000_0000;
         ifid_instr_type_reg <= I_TYPE;
+        ifid_if_exception_code_reg <= 31'b0;
         wb0_dat_o <= {bubble_ID,31'b1};
         if(bubble_ID)begin
           wb0_stb_o <= 1'b0;
@@ -630,12 +660,24 @@ module pipeline_master #(
             ifid_inst_reg <= wb0_dat_i;
             ifid_pc_now_reg <= pc_reg;
             ifid_instr_type_reg <= imm_gen_type_o;
+          end else if(if_exception_code_i)begin // IF state page fault
+            pc_if_state <= 0;
+            pc_seq_nxt <= pc_reg+4;
+            wb0_stb_o <= 1'b0;
+            wb0_cyc_o <= 1'b0;
+            wb0_we_o <= 1'b0;
+            wb0_sel_o <= 4'b0000;
+            ifid_inst_reg <= 32'b0010011; // change the instr into addi x0,x0,0
+            ifid_if_exception_code_reg <= if_exception_code_i; // pass the exception code to next stage
+            ifid_pc_now_reg <= pc_reg;
+            ifid_instr_type_reg <= I_TYPE;
           end else begin
             ifid_inst_reg <= 32'b0010011;
             wb0_stb_o <= 1'b1;
             wb0_cyc_o <= 1'b1;
             wb0_we_o <= 1'b0;
             wb0_sel_o <= 4'b1111;
+            ifid_if_exception_code_reg <= 31'b0;
           end
         end
       end
@@ -654,6 +696,9 @@ module pipeline_master #(
           idex_mem_en <= 0;
           idex_instr_type_reg <= I_TYPE;
           idex_rf_wen <= 1; // Never mind whether to allow to read x0, because it will return zero at anytime, thus it doesn't have conflict problem!
+          idex_if_exception_code_reg <= 31'b0;
+          idex_exception_instr_reg <= 31'b0;
+          idex_exception_instr_wen_reg <= 0;
         end
       end else if(bubble_ID) begin
         if(!bubble_EXE) begin
@@ -669,6 +714,9 @@ module pipeline_master #(
           idex_mem_en <= 0;
           idex_instr_type_reg <= I_TYPE;
           idex_rf_wen <= 1; // Never mind whether to allow to read x0, because it will return zero at anytime, thus it doesn't have conflict problem!
+          idex_if_exception_code_reg <= 31'b0;
+          idex_exception_instr_reg <= 31'b0;
+          idex_exception_instr_wen_reg <= 0;
         end end 
       else begin
         idex_inst_reg <= ifid_inst_reg;
@@ -679,26 +727,30 @@ module pipeline_master #(
         idex_pc_now_reg <= ifid_pc_now_reg;
         idex_use_rs2 <= use_rs2;
         idex_instr_type_reg <= imm_gen_type_o;
+        idex_if_exception_code_reg <= ifid_if_exception_code_reg;
 
         // NOTE
         case(ifid_inst_reg[6:0])
           LUI:begin // do nothing
+            idex_exception_instr_wen_reg <= 0;
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�?????, �?????级一级传下去
-            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�?????
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�??????, �??????级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�??????
           end
           BEQ_BNE_BLT_BGE_BLTU_BGTU:begin // PC+imm
+            idex_exception_instr_wen_reg <= 0;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
             idex_rf_wen <= 0;
           end
           LB_LW_LH_LBU_LHU:begin // PC+imm
+            idex_exception_instr_wen_reg <= 0;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 1;
             idex_rf_wen <= 1;
           end
           SB_SW_SH:begin // rs1+imm
-            
+            idex_exception_instr_wen_reg <= 0;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 1;
             idex_rf_wen <= 0;
@@ -706,6 +758,7 @@ module pipeline_master #(
           ADDI_ANDI_ORI_SLLI_SRLI_CLZ_CTZ_SLTI_SLTIU_XORI_SRAI:begin // rs1+imm
             idex_rf_wen <= 1;
             idex_mem_en <= 0;
+            idex_exception_instr_wen_reg <= 0;
             case(ifid_inst_reg[14:12])
               3'b000:idex_alu_op_reg <= ALU_ADD;
               3'b010:idex_alu_op_reg <= ALU_LT;     // SLTI
@@ -732,10 +785,11 @@ module pipeline_master #(
               3'b100:idex_alu_op_reg <= ALU_XOR;   // XORI
             endcase
           end
-          ADD_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin // rs1+rs2
+          ADD_SUB_OR_AND_XOR_MINU_SLTU_SLL_SLT_SRA:begin // rs1+rs2
             idex_rf_wen <= 1;
+            idex_exception_instr_wen_reg <= 0;
             case(ifid_inst_reg[14:12])
-              3'b000:idex_alu_op_reg <= ALU_ADD;
+              3'b000:idex_alu_op_reg <= ifid_inst_reg[30] ? ALU_SUB : ALU_ADD;
               3'b011:idex_alu_op_reg <= ALU_LTU; // SLTU
               3'b111:idex_alu_op_reg <= ALU_AND;
               3'b110:begin
@@ -765,18 +819,21 @@ module pipeline_master #(
             idex_rf_wen <= 1;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
+            idex_exception_instr_wen_reg <= 0;
           end
           JALR:begin
             idex_rf_wen <= 1;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
+            idex_exception_instr_wen_reg <= 0;
           end
           AUIPC:begin
             idex_rf_wen <= 1;
             idex_alu_op_reg <= ALU_ADD;
             idex_mem_en <= 0;
+            idex_exception_instr_wen_reg <= 0;
           end
-          CSR_EBREAK_ECALL_MRET:begin
+          CSR_EBREAK_ECALL_MRET_SRET_SFENCEVMA:begin
             if(ifid_inst_reg[14:12]!=3'b000)begin // CSR(c,s,w)
               idex_rf_wen <= 1;
             end
@@ -790,6 +847,8 @@ module pipeline_master #(
             idex_rf_wen <= 0;
             idex_alu_op_reg <= ALU_DEFAULT;
             idex_mem_en <= 0;
+            idex_exception_instr_reg <= ifid_inst_reg;
+            idex_exception_instr_wen_reg <= 1;
           end
         endcase
       end
@@ -808,6 +867,9 @@ module pipeline_master #(
           exme_rf_wen <= 1; // Same to above
           // exme_rpc_wen <= 0;
           exme_pc_now_reg <= 32'b0;
+          exme_if_exception_code_reg <= 31'b0;
+          exme_exception_instr_reg <= 31'b0;
+          exme_exception_instr_wen_reg <= 0;
           
         end
       end else if(bubble_EXE)begin
@@ -824,6 +886,9 @@ module pipeline_master #(
           exme_rf_wen <= 1; // Same to above
           // exme_rpc_wen <= 0;
           exme_pc_now_reg <= 32'b0;
+          exme_if_exception_code_reg <= 31'b0;
+          exme_exception_instr_reg <= 31'b0;
+          exme_exception_instr_wen_reg <= 0;
         end
       end else begin
         exme_inst_reg <= idex_inst_reg;
@@ -836,6 +901,10 @@ module pipeline_master #(
         exme_use_rs2 <= idex_use_rs2;
         exme_instr_type_reg <= idex_instr_type_reg;
         exme_pc_now_reg <= idex_pc_now_reg;
+        exme_if_exception_code_reg <= idex_if_exception_code_reg;
+        exme_exception_instr_reg <= idex_exception_instr_reg;
+        exme_exception_instr_wen_reg <= idex_exception_instr_wen_reg;
+
 
         // NOTE
         case(idex_instr_type_reg)
@@ -973,7 +1042,7 @@ module pipeline_master #(
               case(exme_inst_reg_copy[6:0])
                 LB_LW_LH_LBU_LHU: begin
                   if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
-                    // 进行符号位扩展
+                    // 进行符号位扩�?
                     if(exme_bias[1:0]==2'b0) begin
                       if (wb1_dat_i[7]) begin
                         mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[7:0]};
@@ -1000,7 +1069,7 @@ module pipeline_master #(
                       end
                     end
                   end else if(exme_inst_reg_copy[14:12] == 3'b100) begin
-                    // LBU, 零扩展
+                    // LBU, 零扩�?
                     if(exme_bias[1:0]==2'b0) begin
                       mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
                     end else if(exme_bias[1:0]==2'b01) begin
@@ -1011,7 +1080,7 @@ module pipeline_master #(
                       mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
                     end
                   end else if(exme_inst_reg_copy[14:12] == 3'b001)begin
-                    // LH, 符号位扩展
+                    // LH, 符号位扩�?
                     if(exme_bias[1:0]==2'b0) begin
                       if (wb1_dat_i[15]) begin
                         mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[15:0]};
@@ -1026,7 +1095,7 @@ module pipeline_master #(
                       end
                     end
                   end else if(exme_inst_reg_copy[14:12] == 3'b101)begin
-                    // LHU, 零扩展
+                    // LHU, 零扩�?
                     if(exme_bias[1:0]==2'b0) begin
                       mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
                     end else begin
@@ -1053,7 +1122,7 @@ module pipeline_master #(
                 LB_LW_LH_LBU_LHU: begin
                   wb1_we_o <= 1'b0;
                   if((exme_inst_reg[14:12] == 3'b000) || (exme_inst_reg[14:12] == 3'b100))begin //LB, LBU
-                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);  // 左移 0,1,2,3 位
+                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);  // 左移 0,1,2,3 �?
                     // wb1_sel_o <= 4'b0001;
                   end else if ((exme_inst_reg[14:12] == 3'b001) || (exme_inst_reg[14:12] == 3'b101)) begin
                     // LH, LHU
@@ -1114,7 +1183,7 @@ module pipeline_master #(
             end
           end else begin
             mewb_rf_waddr_reg <= exme_rf_waddr_reg;
-            if(exme_inst_reg[6:0]==JAL)begin
+            if(exme_inst_reg[6:0]==JAL || exme_inst_reg[6:0]==JALR)begin // zrp is a sb qaq
               // mewb_rpc_wdata_reg <=  exme_alu_result_reg;
               mewb_rf_wdata_reg <= exme_pc_now_reg + 4;
             end else begin

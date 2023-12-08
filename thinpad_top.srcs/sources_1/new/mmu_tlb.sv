@@ -53,9 +53,10 @@ module mmu_tlb #(
             tlbe.tlbi = tlb_virt_addr.tlbi;
             tlbe.asid = satp_in.asid;
 
-            rsw = 2'b00;
-            pte = {2'b00, query_addr[31:12], rsw, 8'b00001111};  // TODO: check 
-            tlbe.pte = pte;
+            // rsw = 2'b00;
+            // pte = {2'b00, query_addr[31:12], rsw, 8'b00001111};  // TODO: check 
+            // tlbe.pte = pte;
+            tlbe.pte = {2'b00, query_addr[31:12], 2'b00, 8'b00001111}; // TODO: Avoid Latch check
 
             tlbe.valid = 1;            
         end else begin
@@ -84,8 +85,10 @@ module mmu_tlb #(
         translate_en = 0;
         translate_addr = 32'hffffffff;
         // tlb_ack = hit_tlb || !query_en;
-        tlb_ack = hit_tlb && !is_translating; // TODO: check
+        // tlb_ack = hit_tlb && !is_translating; // TODO: check
+        tlb_ack = hit_tlb ; // TODO: Warning !!! you need to discuss this with your team members!
         satp_out = satp_in;
+        tlb_addr_out = 31'b0; // TODO: Avoid Latch check
         if(query_en) begin
             if(hit_tlb) begin 
                 translate_en = 0;

@@ -11,8 +11,8 @@ module RegFile32(
 );
     reg [31:0] register [31:0]; // 定义 32 �? 32 位寄存器
     always_comb begin
-        rdata_a <= register[raddr_a];
-        rdata_b <= register[raddr_b];
+        rdata_a = register[raddr_a];
+        rdata_b = register[raddr_b];
     end
     always_ff @(posedge clk) begin
         if(reset) begin
