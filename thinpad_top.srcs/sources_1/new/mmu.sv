@@ -255,6 +255,9 @@ always_ff @ (posedge clk) begin
 
                     STATE_PPN_ACTION : begin
                         tlb_translate_ack <= 0;
+                        if(tlb_exception)begin
+                            page_table_state <= STATE_ERROR;
+                        end
                         if (mux_ack_in) begin
                             master_return_data_out <= mux_data_in;
                             page_table_state <= STATE_PPN_WAIT;
