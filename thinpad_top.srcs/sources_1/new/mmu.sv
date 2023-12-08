@@ -20,6 +20,7 @@ module mmu #(
     input wire master_stb_in,
     input wire master_cyc_in,
     output reg master_ack_out,
+    input wire flush_tlb_i,
     
     // mux: from wishbone
     output reg [31:0] mux_addr_out,
@@ -183,7 +184,7 @@ always_ff @ (posedge clk) begin
         last_master_addr_in <= 0;
     end else begin
         last_master_addr_in <= master_addr_in;
-        if (page_table_state != STATE_INIT && !same_master_addr_in) begin
+        if ((page_table_state != STATE_INIT && !same_master_addr_in) || flush_tlb_i) begin
             page_table_state <= STATE_INIT;
         end else begin
             if (page_table_en && ((tlb_en && tlb_ack) || is_tlb)) begin
@@ -398,7 +399,7 @@ always_comb begin
                 mux_sel_out = 0;
                 mux_stb_out = 0;
                 master_data_out = 0;
-                master_ack_out = 0;
+                master_ack_out = 1; // TRY
             end
         endcase
     end
@@ -435,7 +436,8 @@ mmu_tlb TLB(
     .if_exception_addr_o(if_exception_addr_o),
     .mem_exception_addr_o(mem_exception_addr_o),
     .id_exception_instr_i(id_exception_instr_i),
-    .id_exception_instr_wen(id_exception_instr_wen)
+    .id_exception_instr_wen(id_exception_instr_wen),
+    .flush_tlb_i(flush_tlb_i)
 );
 
     

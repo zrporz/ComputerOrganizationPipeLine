@@ -33,7 +33,7 @@ module pipeline_master #(
     output wire [31:0] satp_o,
     output wire[1:0]  priviledge_mode_o,
 
-    // output reg exme_rf_wen,
+    // output reg exme_query_wen,
 
     // input for page fault exception
     input wire [30:0] if_exception_code_i,
@@ -41,7 +41,9 @@ module pipeline_master #(
     input wire [30:0] mem_exception_code_i,
     input wire [ADDR_WIDTH-1:0] mem_exception_addr_i, // VA
     input wire [DATA_WIDTH-1:0] id_exception_instr_i,
-    input wire id_exception_instr_wen
+    input wire id_exception_instr_wen,
+    // cpu->mmu
+    output wire flush_tlb_o
 );
 
   typedef enum logic [2:0] { 
@@ -287,7 +289,7 @@ module pipeline_master #(
     endcase
   end
   //=========== DECODER MODULE END ===========
-  
+
   //=========== Risk and Conflict Solver BEGIN===========
   wire bubble_IF;
   wire bubble_ID;
@@ -517,12 +519,13 @@ module pipeline_master #(
     .mtime_i(mtime_lo_i),
     .mtimeh_i(mtime_hi_i),
     .satp_o(satp_o),
+    .flush_tlb_o(flush_tlb_o),
     // instruciont fetch page fault
     .if_exception_code_i(exme_if_exception_code_reg),
     .if_exception_addr_i(exme_pc_now_reg),
     // mem fetch page fault
     .mem_exception_code_i(mem_exception_code_i),
-    .mem_exception_addr_i(exme_pc_now_reg),
+    .mem_exception_addr_i(mem_exception_addr_i),
     // Illegal instruction
     .id_exception_instr_i(exme_exception_instr_reg),
     .id_exception_instr_wen(exme_exception_instr_wen_reg),

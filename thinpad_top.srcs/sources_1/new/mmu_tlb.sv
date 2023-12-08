@@ -36,7 +36,8 @@ module mmu_tlb #(
     input wire translation_exception,
     input wire query_wen,      // whether to write 
     output logic[DATA_WIDTH-1:0] id_exception_instr_i,
-    output logic id_exception_instr_wen
+    output logic id_exception_instr_wen,
+    input wire flush_tlb_i
 
 );
 
@@ -88,7 +89,7 @@ module mmu_tlb #(
         // tlb_ack = hit_tlb && !is_translating; // TODO: check
         tlb_ack = hit_tlb ; // TODO: Warning !!! you need to discuss this with your team members!
         satp_out = satp_in;
-        tlb_addr_out = 31'b0; // TODO: Avoid Latch check
+        tlb_addr_out = 32'b0; // TODO: Avoid Latch check
         if(query_en) begin
             if(hit_tlb) begin 
                 translate_en = 0;
@@ -142,21 +143,59 @@ module mmu_tlb #(
             last_query_addr <= 0;
             is_translating <= 0;
         end else begin
-            last_query_addr <= query_addr;
-
-            if (translate_ack) begin
+            if(flush_tlb_i)begin
+                tlb[0] <= 0;
+                tlb[1] <= 0;
+                tlb[2] <= 0;
+                tlb[3] <= 0;
+                tlb[4] <= 0;
+                tlb[5] <= 0;
+                tlb[6] <= 0;
+                tlb[6] <= 0;
+                tlb[7] <= 0;
+                tlb[8] <= 0;
+                tlb[9] <= 0;
+                tlb[10] <= 0;
+                tlb[11] <= 0;
+                tlb[12] <= 0;
+                tlb[13] <= 0;
+                tlb[14] <= 0;
+                tlb[15] <= 0;
+                tlb[16] <= 0;
+                tlb[17] <= 0;
+                tlb[18] <= 0;
+                tlb[19] <= 0;
+                tlb[20] <= 0;
+                tlb[21] <= 0;
+                tlb[22] <= 0;
+                tlb[23] <= 0;
+                tlb[24] <= 0;
+                tlb[25] <= 0;
+                tlb[26] <= 0;
+                tlb[27] <= 0;
+                tlb[28] <= 0;
+                tlb[29] <= 0;
+                tlb[30] <= 0;
+                tlb[31] <= 0;
+                last_query_addr <= 0;
                 is_translating <= 0;
-            end else if (translate_en) begin
-                is_translating <= 1;
-            end
+            end else begin
+                last_query_addr <= query_addr;
 
-            if(query_en && translate_ack) begin
-                tlb[tlb_virt_addr.tlbt] <= {
-                    tlb_virt_addr.tlbi,
-                    satp_in.asid,
-                    translate_pte_in,
-                    1'b1
-                };
+                if (translate_ack) begin
+                    is_translating <= 0;
+                end else if (translate_en) begin
+                    is_translating <= 1;
+                end
+
+                if(query_en && translate_ack) begin
+                    tlb[tlb_virt_addr.tlbt] <= {
+                        tlb_virt_addr.tlbi,
+                        satp_in.asid,
+                        translate_pte_in,
+                        1'b1
+                    };
+                end
             end
         end
     end

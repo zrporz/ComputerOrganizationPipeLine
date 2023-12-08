@@ -18,6 +18,7 @@ module Csr#(
     input wire [DATA_WIDTH-1:0] mtimeh_i,
     // mmu -> cpu -> csr
     output wire [ADDR_WIDTH-1:0] satp_o,
+    output reg flush_tlb_o,
     // pipeline -> csr
     input wire[30:0] if_exception_code_i, // Instruction page fault: 12
     input wire[ADDR_WIDTH-1:0] if_exception_addr_i, // Virtual address
@@ -182,10 +183,12 @@ module Csr#(
         priviledge_mode_reg <= 2'b11;
         pc_next_en <= 0;
         pc_next_o <= 32'b0;
+        flush_tlb_o <= 0;
       end else begin
         msip.mtip <= mtime_exceed_i;
         casez(inst_i)
           CSRRC:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
@@ -215,6 +218,7 @@ module Csr#(
             end
           end
           CSRRCI:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
@@ -244,6 +248,7 @@ module Csr#(
             end
           end
           CSRRS:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
@@ -273,6 +278,7 @@ module Csr#(
             end
           end
           CSRRSI:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
@@ -302,6 +308,7 @@ module Csr#(
             end
           end
           CSRRW:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
@@ -331,6 +338,7 @@ module Csr#(
             end
           end
           CSRRWI:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
             if(inst_i[19:15])begin
@@ -359,7 +367,11 @@ module Csr#(
               endcase
             end
           end
+          SFENCE_VMA:begin
+            flush_tlb_o <= 1;
+          end
           EBREAK:begin
+            flush_tlb_o <= 0;
             mepc <= pc_now_i; 
             mcause.interrupt <= 1'b0;
             mcause.exception_code <= 31'h3;
@@ -369,6 +381,7 @@ module Csr#(
             pc_next_o <= {mtvec[31:2],2'b00};
           end
           ECALL:begin
+            flush_tlb_o <= 0;
             if((priviledge_mode_reg == PRIVILEDGE_MODE_U && medeleg[8]) || (priviledge_mode_reg == PRIVILEDGE_MODE_S && medeleg[9]))begin
               sepc <= pc_now_i;
               scause.interrupt <= 1'b0;
@@ -389,18 +402,21 @@ module Csr#(
             end
           end
           MRET:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= mepc;
             priviledge_mode_reg <= msstatus.mpp;
             msie.mtie <= 1'b1;
           end
           SRET:begin
+            flush_tlb_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= sepc;
             priviledge_mode_reg <= msstatus.spp;
             msie.stie <= 1'b1; //???
           end
           default:begin
+            flush_tlb_o <= 0;
             // Instr page fault
             if(if_exception_code_i)begin
               if(medeleg[if_exception_code_i])begin 

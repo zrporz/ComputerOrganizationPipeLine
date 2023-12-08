@@ -275,6 +275,7 @@ module thinpad_top (
   logic [31:0] mem_exception_addr; // VA
   logic [31:0] id_exception_instr;
   logic id_exception_instr_wen;
+  logic flush_tlb_o;
 
   pipeline_master lab6_master(
       .clk_i(sys_clk),
@@ -316,7 +317,8 @@ module thinpad_top (
       .mem_exception_code_i(mem_exception_code),
       .mem_exception_addr_i(mem_exception_addr),
       .id_exception_instr_i(id_exception_instr),
-      .id_exception_instr_wen(id_exception_instr_wen)
+      .id_exception_instr_wen(id_exception_instr_wen),
+      .flush_tlb_o(flush_tlb_o)
   );
   
   /* =========== MMU begin ===================*/
@@ -357,7 +359,8 @@ module thinpad_top (
     .tlb_exception_code(if_exception_code),
     .if_exception_addr_o(if_exception_addr),
     .id_exception_instr_i(id_exception_instr),
-    .id_exception_instr_wen(id_exception_instr_wen)
+    .id_exception_instr_wen(id_exception_instr_wen),
+    .flush_tlb_i(flush_tlb_o)
   );
 
     /* =========== MMU begin ===================*/
@@ -392,11 +395,12 @@ module thinpad_top (
 
     // mmu_if or mmu_em
     .is_if_mmu(1'b0),
-    .query_wen(mmu_mem_we_o),
+    .query_wen(mmu_mem_we_o), // TODO Discuss with team membears
 
     // exception output
     .tlb_exception_code(mem_exception_code),
-    .mem_exception_addr_o(mem_exception_addr)
+    .mem_exception_addr_o(mem_exception_addr),
+    .flush_tlb_i(flush_tlb_o)
   );
 
   /* =========== Lab5 MUX begin =========== */
@@ -902,7 +906,7 @@ module thinpad_top (
 
   // 串口控制器模�?
   // NOTE: 如果修改系统时钟频率，也要修改此处的时钟频率参数
-  uart_controller #(
+  uart_sim_controller #(
       .CLK_FREQ(10_000_000),
       .BAUD    (115200)
   ) uart_controller (
