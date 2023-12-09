@@ -10,6 +10,7 @@ module pipeline_master #(
     output reg wb0_cyc_o,
     output reg wb0_stb_o,
     input wire wb0_ack_i,
+    input wire wb0_exc_i,
     output reg [ADDR_WIDTH-1:0] wb0_adr_o,
     output reg [DATA_WIDTH-1:0] wb0_dat_o,
     input wire [DATA_WIDTH-1:0] wb0_dat_i,
@@ -19,6 +20,7 @@ module pipeline_master #(
     output reg wb1_cyc_o,
     output reg wb1_stb_o,
     input wire wb1_ack_i,
+    input wire wb1_exc_i,
     output reg [ADDR_WIDTH-1:0] wb1_adr_o,
     output reg [DATA_WIDTH-1:0] wb1_dat_o,
     input wire [DATA_WIDTH-1:0] wb1_dat_i,
@@ -1042,75 +1044,80 @@ module pipeline_master #(
               exme_state <= 1'b0;
               exme_inst_reg_copy <= exme_inst_reg;
               exme_bias <= 2'b0;
-              case(exme_inst_reg_copy[6:0])
-                LB_LW_LH_LBU_LHU: begin
-                  if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
-                    // 进行符号位扩�?
-                    if(exme_bias[1:0]==2'b0) begin
-                      if (wb1_dat_i[7]) begin
-                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[7:0]};
+              if(wb1_exc_i)begin
+                mewb_rf_wdata_reg <= 32'b0;
+                mewb_rf_waddr_reg <= 5'b0; // write to 0, which means not write
+              end else begin
+                case(exme_inst_reg_copy[6:0])
+                  LB_LW_LH_LBU_LHU: begin
+                    if(exme_inst_reg_copy[14:12] == 3'b000)begin //LB
+                      // 进行符号位扩�?
+                      if(exme_bias[1:0]==2'b0) begin
+                        if (wb1_dat_i[7]) begin
+                          mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[7:0]};
+                        end else begin
+                          mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
+                        end
+                      end else if(exme_bias[1:0]==2'b01) begin
+                        if (wb1_dat_i[15]) begin
+                          mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[15:8]};
+                        end else begin
+                          mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
+                        end
+                      end else if(exme_bias[1:0]==2'b10) begin
+                        if (wb1_dat_i[23]) begin
+                          mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[23:16]};
+                        end else begin 
+                          mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
+                        end
                       end else begin
+                        if (wb1_dat_i[31]) begin
+                          mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[31:24]};
+                        end else begin
+                          mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
+                        end
+                      end
+                    end else if(exme_inst_reg_copy[14:12] == 3'b100) begin
+                      // LBU, 零扩�?
+                      if(exme_bias[1:0]==2'b0) begin
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
-                      end
-                    end else if(exme_bias[1:0]==2'b01) begin
-                      if (wb1_dat_i[15]) begin
-                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[15:8]};
-                      end else begin
+                      end else if(exme_bias[1:0]==2'b01) begin
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
-                      end
-                    end else if(exme_bias[1:0]==2'b10) begin
-                      if (wb1_dat_i[23]) begin
-                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[23:16]};
-                      end else begin 
+                      end else if(exme_bias[1:0]==2'b10) begin
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
-                      end
-                    end else begin
-                      if (wb1_dat_i[31]) begin
-                        mewb_rf_wdata_reg <= {24'hffffff, wb1_dat_i[31:24]};
                       end else begin
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
                       end
-                    end
-                  end else if(exme_inst_reg_copy[14:12] == 3'b100) begin
-                    // LBU, 零扩�?
-                    if(exme_bias[1:0]==2'b0) begin
-                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
-                    end else if(exme_bias[1:0]==2'b01) begin
-                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[15:8]};
-                    end else if(exme_bias[1:0]==2'b10) begin
-                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[23:16]};
-                    end else begin
-                      mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
-                    end
-                  end else if(exme_inst_reg_copy[14:12] == 3'b001)begin
-                    // LH, 符号位扩�?
-                    if(exme_bias[1:0]==2'b0) begin
-                      if (wb1_dat_i[15]) begin
-                        mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[15:0]};
+                    end else if(exme_inst_reg_copy[14:12] == 3'b001)begin
+                      // LH, 符号位扩�?
+                      if(exme_bias[1:0]==2'b0) begin
+                        if (wb1_dat_i[15]) begin
+                          mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[15:0]};
+                        end else begin
+                          mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
+                        end
                       end else begin
-                        mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
+                        if (wb1_dat_i[31]) begin
+                          mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[31:16]};
+                        end else begin
+                          mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[31:16]};
+                        end
                       end
-                    end else begin
-                      if (wb1_dat_i[31]) begin
-                        mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[31:16]};
+                    end else if(exme_inst_reg_copy[14:12] == 3'b101)begin
+                      // LHU, 零扩�?
+                      if(exme_bias[1:0]==2'b0) begin
+                        mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
                       end else begin
                         mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[31:16]};
                       end
+                    end else begin //LW
+                      mewb_rf_wdata_reg <= wb1_dat_i;
                     end
-                  end else if(exme_inst_reg_copy[14:12] == 3'b101)begin
-                    // LHU, 零扩�?
-                    if(exme_bias[1:0]==2'b0) begin
-                      mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
-                    end else begin
-                      mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[31:16]};
-                    end
-                  end else begin //LW
-                    mewb_rf_wdata_reg <= wb1_dat_i;
+                    // mewb_rf_wdata_reg <= {24'b0,(wb1_dat_i>>exme_alu_result_reg[1:0])[7:0]};
+                    mewb_rf_waddr_reg <= exme_rf_waddr_reg_copy;
                   end
-                  // mewb_rf_wdata_reg <= {24'b0,(wb1_dat_i>>exme_alu_result_reg[1:0])[7:0]};
-                  mewb_rf_waddr_reg <= exme_rf_waddr_reg_copy;
-                end
-              endcase
+                endcase
+              end
             end else begin
               wb1_cyc_o <= 1'b1;
               wb1_stb_o <= 1'b1;

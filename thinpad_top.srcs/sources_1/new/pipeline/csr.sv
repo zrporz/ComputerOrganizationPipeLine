@@ -124,7 +124,7 @@ module Csr#(
     always_comb begin
       rf_wdata_o = 32'b0;
       casez(inst_i)
-        CSRRC,CSRRS,CSRRW,CSRRCI,CSRRSI,CSRRWI: begin
+        CSRRC,CSRRS,CSRRCI,CSRRSI: begin
           case(inst_i[31:20])
             MSTATUS: rf_wdata_o = msstatus & `MSTATUS_MASK;
             SSTATUS: rf_wdata_o = msstatus & `SSTATUS_MASK;
@@ -151,6 +151,36 @@ module Csr#(
             TIME: rf_wdata_o = mtime_i;
             TIMEH: rf_wdata_o = mtimeh_i;
           endcase
+        end
+        CSRRW, CSRRWI: begin
+          if(inst_i[11:7])begin
+            case(inst_i[31:20])
+              MSTATUS: rf_wdata_o = msstatus & `MSTATUS_MASK;
+              SSTATUS: rf_wdata_o = msstatus & `SSTATUS_MASK;
+              MTVEC: rf_wdata_o = mtvec;
+              STVEC: rf_wdata_o = stvec;
+              MCAUSE: rf_wdata_o = mcause;
+              SCAUSE: rf_wdata_o = scause;
+              MIP: rf_wdata_o = msip;
+              SIP: rf_wdata_o = (msip & `SIP_MASK);
+              MIE: rf_wdata_o = msie;
+              SIE: rf_wdata_o = (msie & `SIE_MASK);
+              MSCRATCH: rf_wdata_o = mscratch;
+              SSCRATCH: rf_wdata_o = sscratch;
+              MEPC: rf_wdata_o = mepc;
+              SEPC: rf_wdata_o = sepc;
+              MTVAL: rf_wdata_o = mtval;
+              STVAL: rf_wdata_o = stval;
+              MIDELEG: rf_wdata_o = mideleg;
+              MEDELEG: rf_wdata_o = medeleg;
+              SATP: rf_wdata_o = satp;
+              PMPADDR0: rf_wdata_o =  pmpaddr0;
+              PMPCFG0: rf_wdata_o =  pmpcfg0;
+              // CSRRS Instrucion may read mtime register(RDTIME,RDTIMEH), but promise that rs1 is zero, so in this case, just read mtime register, don't need to write anything in          
+              TIME: rf_wdata_o = mtime_i;
+              TIMEH: rf_wdata_o = mtimeh_i;
+            endcase
+          end
         end
       endcase
     end
@@ -311,61 +341,58 @@ module Csr#(
             flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
-            if(inst_i[19:15])begin
-              case(inst_i[31:20])
-                MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (rf_rdata_a_i & `MSTATUS_MASK);
-                SSTATUS: msstatus <= (msstatus & ~`SSTATUS_MASK) | (rf_rdata_a_i & `SSTATUS_MASK);
-                MTVEC: mtvec <= rf_rdata_a_i;
-                STVEC: stvec <= rf_rdata_a_i;
-                MCAUSE: mcause <= rf_rdata_a_i;
-                SCAUSE: scause <= rf_rdata_a_i;
-                MIP: msip <= rf_rdata_a_i;
-                SIP: msip <= (msip & ~`SIP_MASK) | (rf_rdata_a_i & `SIP_MASK);
-                MIE: msie <= rf_rdata_a_i;
-                SIE: msie <= (msie & ~`SIE_MASK) | (rf_rdata_a_i & `SIE_MASK);
-                MSCRATCH: mscratch <= rf_rdata_a_i;
-                SSCRATCH: sscratch <= rf_rdata_a_i;
-                MEPC: mepc <= rf_rdata_a_i;
-                SEPC: sepc <= rf_rdata_a_i;
-                MTVAL: mtval <= rf_rdata_a_i;
-                STVAL: stval <= rf_rdata_a_i;
-                MIDELEG: mideleg <= rf_rdata_a_i;
-                MEDELEG: medeleg <= rf_rdata_a_i;
-                SATP: satp <= rf_rdata_a_i;
-                PMPADDR0: pmpaddr0 <=  rf_rdata_a_i;      
-                PMPCFG0: pmpcfg0 <=  rf_rdata_a_i;             
-              endcase
-            end
+            // For csr write, don't need rs1!=x0 or uimm != 0
+            case(inst_i[31:20])
+              MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (rf_rdata_a_i & `MSTATUS_MASK);
+              SSTATUS: msstatus <= (msstatus & ~`SSTATUS_MASK) | (rf_rdata_a_i & `SSTATUS_MASK);
+              MTVEC: mtvec <= rf_rdata_a_i;
+              STVEC: stvec <= rf_rdata_a_i;
+              MCAUSE: mcause <= rf_rdata_a_i;
+              SCAUSE: scause <= rf_rdata_a_i;
+              MIP: msip <= rf_rdata_a_i;
+              SIP: msip <= (msip & ~`SIP_MASK) | (rf_rdata_a_i & `SIP_MASK);
+              MIE: msie <= rf_rdata_a_i;
+              SIE: msie <= (msie & ~`SIE_MASK) | (rf_rdata_a_i & `SIE_MASK);
+              MSCRATCH: mscratch <= rf_rdata_a_i;
+              SSCRATCH: sscratch <= rf_rdata_a_i;
+              MEPC: mepc <= rf_rdata_a_i;
+              SEPC: sepc <= rf_rdata_a_i;
+              MTVAL: mtval <= rf_rdata_a_i;
+              STVAL: stval <= rf_rdata_a_i;
+              MIDELEG: mideleg <= rf_rdata_a_i;
+              MEDELEG: medeleg <= rf_rdata_a_i;
+              SATP: satp <= rf_rdata_a_i;
+              PMPADDR0: pmpaddr0 <=  rf_rdata_a_i;      
+              PMPCFG0: pmpcfg0 <=  rf_rdata_a_i;             
+            endcase
           end
           CSRRWI:begin
             flush_tlb_o <= 0;
             pc_next_en <= 0;
             pc_next_o <= 32'b0;
-            if(inst_i[19:15])begin
-              case(inst_i[31:20])
-                MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (uimm & `MSTATUS_MASK);
-                SSTATUS: msstatus <= (msstatus & ~`SSTATUS_MASK) | (uimm & `SSTATUS_MASK);
-                MTVEC: mtvec <= uimm;
-                STVEC: stvec <= uimm;
-                MCAUSE: mcause <= uimm;
-                SCAUSE: scause <= uimm;
-                MIP: msip <= uimm;
-                SIP: msip <= (msip & ~`SIP_MASK) | (uimm & `SIP_MASK);
-                MIE: msie <= uimm;
-                SIE: msie <= (msie & ~`SIE_MASK) | (uimm & `SIE_MASK);
-                MSCRATCH: mscratch <= uimm;
-                SSCRATCH: sscratch <= uimm;
-                MEPC: mepc <= uimm;
-                SEPC: sepc <= uimm;
-                MTVAL: mtval <= uimm;
-                STVAL: stval <= uimm;
-                MIDELEG: mideleg <= uimm;
-                MEDELEG: medeleg <= uimm;
-                SATP: satp <= uimm;
-                PMPADDR0: pmpaddr0 <=  uimm;      
-                PMPCFG0: pmpcfg0 <=  uimm;            
-              endcase
-            end
+            case(inst_i[31:20])
+              MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (uimm & `MSTATUS_MASK);
+              SSTATUS: msstatus <= (msstatus & ~`SSTATUS_MASK) | (uimm & `SSTATUS_MASK);
+              MTVEC: mtvec <= uimm;
+              STVEC: stvec <= uimm;
+              MCAUSE: mcause <= uimm;
+              SCAUSE: scause <= uimm;
+              MIP: msip <= uimm;
+              SIP: msip <= (msip & ~`SIP_MASK) | (uimm & `SIP_MASK);
+              MIE: msie <= uimm;
+              SIE: msie <= (msie & ~`SIE_MASK) | (uimm & `SIE_MASK);
+              MSCRATCH: mscratch <= uimm;
+              SSCRATCH: sscratch <= uimm;
+              MEPC: mepc <= uimm;
+              SEPC: sepc <= uimm;
+              MTVAL: mtval <= uimm;
+              STVAL: stval <= uimm;
+              MIDELEG: mideleg <= uimm;
+              MEDELEG: medeleg <= uimm;
+              SATP: satp <= uimm;
+              PMPADDR0: pmpaddr0 <=  uimm;      
+              PMPCFG0: pmpcfg0 <=  uimm;            
+            endcase
           end
           SFENCE_VMA:begin
             flush_tlb_o <= 1;

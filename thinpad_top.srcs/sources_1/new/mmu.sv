@@ -20,6 +20,7 @@ module mmu #(
     input wire master_stb_in,
     input wire master_cyc_in,
     output reg master_ack_out,
+    output reg master_exc_out,
     input wire flush_tlb_i,
     
     // mux: from wishbone
@@ -287,6 +288,7 @@ always_comb begin
     mux_we_out = master_we_in;
     mux_sel_out = master_sel_in;
     mux_stb_out = master_stb_in;
+    master_exc_out = 0;
     // mux_cyc_out = master_cyc_in;
     if (master_stb_in) begin
         master_data_out = mux_data_in;
@@ -402,6 +404,7 @@ always_comb begin
                 mux_sel_out = 0;
                 mux_stb_out = 0;
                 master_data_out = 0;
+                master_exc_out = 1; // Let the master know that there is an exception
                 master_ack_out = 1; // TRY
             end
         endcase
