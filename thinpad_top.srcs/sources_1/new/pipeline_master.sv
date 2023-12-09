@@ -11,7 +11,7 @@ module pipeline_master #(
     output reg wb0_stb_o,
     input wire wb0_ack_i,
     input wire wb0_exc_i,
-    output reg [ADDR_WIDTH-1:0] wb0_adr_o,
+    output wire [ADDR_WIDTH-1:0] wb0_adr_o,
     output reg [DATA_WIDTH-1:0] wb0_dat_o,
     input wire [DATA_WIDTH-1:0] wb0_dat_i,
     output reg [DATA_WIDTH/8-1:0] wb0_sel_o,
@@ -47,7 +47,8 @@ module pipeline_master #(
     // cpu->mmu
     output wire flush_tlb_o
 );
-
+  reg[31:0] wb0_adr_o_reg;
+  assign wb0_adr_o = wb0_adr_o_reg;
   typedef enum logic [2:0] { 
     R_TYPE = 3'b001, 
     I_TYPE = 3'b010, 
@@ -298,11 +299,26 @@ module pipeline_master #(
   wire bubble_EXE;
   wire bubble_MEM;
   wire bubble_WB;
+  wire flush_csr_IF;
+  wire flush_csr_ID;
+  wire flush_csr_EXE;
+  wire flush_csr_MEM;
+  wire flush_csr_WB;
+  wire flush_branch_IF;
+  wire flush_branch_ID;
+  wire flush_branch_EXE;
+  wire flush_branch_MEM;
+  wire flush_branch_WB;
   wire flush_IF;
   wire flush_ID;
   wire flush_EXE;
   wire flush_MEM;
   wire flush_WB;
+  assign flush_IF = flush_csr_IF || flush_branch_IF;
+  assign flush_ID = flush_csr_ID || flush_branch_ID;
+  assign flush_EXE = flush_csr_EXE || flush_branch_EXE;
+  assign flush_MEM = flush_csr_MEM || flush_branch_MEM;
+  assign flush_WB = flush_csr_WB || flush_branch_WB;
   hazard_controler u_hazard_controler(
     .wb1_cyc_i(wb1_cyc_o),
     .wb1_ack_i(wb1_ack_i),
@@ -324,11 +340,16 @@ module pipeline_master #(
     .bubble_EXE_o(bubble_EXE),
     .bubble_MEM_o(bubble_MEM),
     .bubble_WB_o(bubble_WB),
-    .flush_IF_o(flush_IF),
-    .flush_ID_o(flush_ID),
-    .flush_EXE_o(flush_EXE),
-    .flush_MEM_o(flush_MEM),
-    .flush_WB_o(flush_WB)
+    .flush_IF_csr_o(flush_csr_IF),
+    .flush_ID_csr_o(flush_csr_ID),
+    .flush_EXE_csr_o(flush_csr_EXE),
+    .flush_MEM_csr_o(flush_csr_MEM),
+    .flush_WB_csr_o(flush_csr_WB),
+    .flush_IF_branch_o(flush_branch_IF),
+    .flush_ID_branch_o(flush_branch_ID),
+    .flush_EXE_branch_o(flush_branch_EXE),
+    .flush_MEM_branch_o(flush_branch_MEM),
+    .flush_WB_branch_o(flush_branch_WB)
   );
   // end
   
@@ -344,8 +365,8 @@ module pipeline_master #(
       // 32'h1: leds_r = {wb0_cyc_o,wb0_stb_o,wb0_ack_i,wb0_we_o,wb0_sel_o,wb1_cyc_o,wb1_stb_o,wb1_ack_i,wb1_we_o,wb1_sel_o};
       // 32'h2: leds_r = wb0_stb_o;
       // 32'h4: leds_r = wb0_ack_i;
-      // 32'h8: leds_r = wb0_adr_o[15:0];
-      // 32'h10: leds_r = wb0_adr_o[31:16];
+      // 32'h8: leds_r = wb0_adr_o_reg[15:0];
+      // 32'h10: leds_r = wb0_adr_o_reg[31:16];
       // 32'h20: leds_r = wb0_dat_o[15:0];
       // 32'h40: leds_r = wb0_dat_o[31:16];
       // 32'h80: leds_r = wb0_dat_i[15:0];
@@ -383,7 +404,7 @@ module pipeline_master #(
   //   .probe2(wb0_cyc_o),
   //   .probe3(wb0_stb_o),
   //   .probe4(wb0_ack_i),
-  //   .probe5(wb0_adr_o),
+  //   .probe5(wb0_adr_o_reg),
   //   .probe6(wb0_dat_o),
   //   .probe7(wb0_dat_i),
   //   .probe8(wb0_sel_o),
@@ -515,6 +536,9 @@ module pipeline_master #(
     .rf_wdata_o(rf_wdata_csr),
     .priviledge_mode_o(priviledge_mode_o),
     .pc_now_i(exme_pc_now_reg),
+    .idex_pc_now_i(idex_pc_now_reg),
+    .ifid_pc_now_i(ifid_pc_now_reg),
+    .wb0_pc_now_i(wb0_adr_o_reg),
     .pc_next_o(pc_csr_nxt),
     .pc_next_en(pc_csr_nxt_en),
     .mtime_exceed_i(mtime_exceed_i),
@@ -531,6 +555,7 @@ module pipeline_master #(
     // Illegal instruction
     .id_exception_instr_i(exme_exception_instr_reg),
     .id_exception_instr_wen(exme_exception_instr_wen_reg),
+    .flush_exe_i(flush_csr_EXE),
     .leds(leds),
     .dip_sw_i(dip_sw)
   );
@@ -545,7 +570,7 @@ module pipeline_master #(
       wb1_we_o <= 1'b0;
       wb1_sel_o <= 4'b0000;
       wb0_dat_o <= 32'b0;
-      wb0_adr_o <= 32'h8000_0000;
+      wb0_adr_o_reg <= 32'h8000_0000;
       wb1_dat_o <= 32'b0;
       wb1_adr_o <= 32'b0;
       // reset every reg stage to addi x0, x0, 0
@@ -616,7 +641,7 @@ module pipeline_master #(
         if(flush_ID)begin
           // IF-ID reset to addi x0, x0, 0
           pc_if_state <=1;
-          wb0_adr_o <= pc_nxt_reg;
+          wb0_adr_o_reg <= pc_nxt_reg;
           pc_reg <= pc_nxt_reg;
           ifid_inst_reg <= 32'b0010011;
           ifid_pc_now_reg <= 32'h8000_0000;
@@ -628,7 +653,7 @@ module pipeline_master #(
           wb0_sel_o <= 4'b0000;
         end
       end else if (bubble_IF) begin
-        // wb0_adr_o <= pc_nxt_reg;
+        // wb0_adr_o_reg <= pc_nxt_reg;
         // if(!bubble_ID)begin
           // IF-ID reset to addi x0, x0, 0
         ifid_inst_reg <= 32'b0010011;
@@ -646,7 +671,7 @@ module pipeline_master #(
       end else begin
         wb0_dat_o <= 32'b0;
         if(!pc_if_state)begin // IDLE
-          wb0_adr_o <= pc_nxt_reg;
+          wb0_adr_o_reg <= pc_nxt_reg;
           pc_reg <= pc_nxt_reg;
           pc_if_state<=1;
           ifid_inst_reg <= 32'b0010011;
@@ -1006,6 +1031,9 @@ module pipeline_master #(
         mewb_rf_waddr_reg <= 5'b0;
         mewb_rf_wdata_reg <= 32'b0;
         // mewb_rpc_wdata_reg <= 32'b0;
+        // wb1_cyc_o <= 1'b0;
+        // wb1_stb_o <= 1'b0;
+        // exme_state <= 1'b0;
 
         mewb_instr_type_reg <= I_TYPE;
         // mewb_rpc_wen <= 0;

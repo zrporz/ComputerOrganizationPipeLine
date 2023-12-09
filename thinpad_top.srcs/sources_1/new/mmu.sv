@@ -198,6 +198,9 @@ always_ff @ (posedge clk) begin
                             master_return_data_out <= mux_data_in;
                             page_table_state <= STATE_TLB_WAIT;
                         end
+                        if(tlb_exception)begin
+                            page_table_state <= STATE_ERROR;
+                        end
                     end
 
                     STATE_TLB_WAIT: begin

@@ -5,10 +5,13 @@ module Csr#(
 ) (
     input wire clk_i,
     input wire rst_i,
-    input wire [ADDR_WIDTH-1:0]inst_i, // instruction
-    input wire [DATA_WIDTH-1:0]rf_rdata_a_i, // rs1 data
-    input wire [ADDR_WIDTH-1:0] pc_now_i,
-    output reg [DATA_WIDTH-1:0]rf_wdata_o, // rd
+    input wire [ADDR_WIDTH-1:0]  inst_i, // instruction
+    input wire [DATA_WIDTH-1:0]  rf_rdata_a_i, // rs1 data
+    input wire [ADDR_WIDTH-1:0]  pc_now_i,
+    input wire [ADDR_WIDTH-1:0]  idex_pc_now_i,
+    input wire [ADDR_WIDTH-1:0]  ifid_pc_now_i,
+    input wire [ADDR_WIDTH-1:0]  wb0_pc_now_i,
+    output reg [DATA_WIDTH-1:0]  rf_wdata_o, // rd
     output reg [1:0] priviledge_mode_o,
     output reg [ADDR_WIDTH-1:0] pc_next_o,
     output reg pc_next_en,
@@ -26,6 +29,7 @@ module Csr#(
     input wire[ADDR_WIDTH-1:0] mem_exception_addr_i, // Virtual address
     input wire[DATA_WIDTH-1:0] id_exception_instr_i, // Illegeal Instruction
     input wire id_exception_instr_wen,
+    input wire flush_exe_i, 
     // debug
     input wire [31:0] dip_sw_i,
     output reg [31:0] leds
@@ -87,6 +91,7 @@ module Csr#(
     pmpcfg0_t pmpcfg0;
     reg[1:0] priviledge_mode_reg; // 00:User, 01:Supervisor, 10:Reserved, 11:Machine
     logic[31:0] uimm;
+    // reg [31:0] previous_csr_pc_reg;
     assign satp_o = satp;
     // always_comb begin
     //   if(mip.mtip && mie.mtie)begin // time interrupt exist and machine mode enable all interrupt
@@ -213,9 +218,11 @@ module Csr#(
         priviledge_mode_reg <= 2'b11;
         pc_next_en <= 0;
         pc_next_o <= 32'b0;
+        // previous_csr_pc_reg <= 32'b0;
         flush_tlb_o <= 0;
       end else begin
         msip.mtip <= mtime_exceed_i;
+        // previous_csr_pc_reg <= pc_next_o;
         casez(inst_i)
           CSRRC:begin
             flush_tlb_o <= 0;
@@ -433,14 +440,16 @@ module Csr#(
             pc_next_en <= 1;
             pc_next_o <= mepc;
             priviledge_mode_reg <= msstatus.mpp;
-            msie.mtie <= 1'b1;
+            msstatus.mie <= msstatus.mpie;
+            // msie.mtie <= 1'b1;
           end
           SRET:begin
             flush_tlb_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= sepc;
             priviledge_mode_reg <= msstatus.spp;
-            msie.stie <= 1'b1; //???
+            msstatus.sie <= msstatus.spie;
+            // msie.stie <= 1'b1; //???
           end
           default:begin
             flush_tlb_o <= 0;
@@ -519,17 +528,38 @@ module Csr#(
               scause.exception_code <= 31'h5;
               pc_next_en <= 1;
               pc_next_o <= {stvec[31:2],2'b00};
-              sepc <= pc_now_i + 4;
+              if(flush_exe_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
+                sepc <= pc_next_o;
+              end else begin
+                sepc <= pc_now_i;
+              end
               msstatus.spp <= priviledge_mode_reg;
               priviledge_mode_reg <= PRIVILEDGE_MODE_S;
+              msstatus.spie <= msstatus.sie;
+              msstatus.sie <= 1'b0;
             end else if(msip.mtip && msie.mtie && (priviledge_mode_reg != PRIVILEDGE_MODE_M || msstatus.mie))begin
               // Machine mode time-out interrupt
               mcause.interrupt <= 1'b1;
               mcause.exception_code <= 31'h7;
               pc_next_en <= 1;
               pc_next_o <= {mtvec[31:2],2'b00};
-              mepc <= pc_now_i + 4;
+              if(flush_exe_i)begin
+                mepc <= pc_next_o;
+              end else begin
+                if(pc_now_i!=32'h8000_0000)begin
+                  mepc <= pc_now_i;
+                end else if(idex_pc_now_i!=32'h8000_0000)begin
+                  mepc <= idex_pc_now_i;
+                end else if(ifid_pc_now_i!=32'h8000_0000)begin
+                  mepc <= ifid_pc_now_i;
+                end 
+                else begin
+                  mepc <= wb0_pc_now_i;
+                end 
+              end
               msstatus.mpp <= priviledge_mode_reg;
+              msstatus.mpie <= msstatus.mie;
+              msstatus.mie <= 1'b0;
               priviledge_mode_reg <= PRIVILEDGE_MODE_M;
             end 
             else begin

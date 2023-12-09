@@ -24,11 +24,16 @@ module hazard_controler#(
     output reg bubble_EXE_o,
     output reg bubble_MEM_o,
     output reg bubble_WB_o,
-    output reg flush_IF_o,
-    output reg flush_ID_o,
-    output reg flush_EXE_o,
-    output reg flush_MEM_o,
-    output reg flush_WB_o
+    output reg flush_IF_csr_o,
+    output reg flush_ID_csr_o,
+    output reg flush_EXE_csr_o,
+    output reg flush_MEM_csr_o,
+    output reg flush_WB_csr_o,
+    output reg flush_IF_branch_o,
+    output reg flush_ID_branch_o,
+    output reg flush_EXE_branch_o,
+    output reg flush_MEM_branch_o,
+    output reg flush_WB_branch_o
 );
     always_comb begin
       bubble_IF_o = 0;
@@ -36,19 +41,25 @@ module hazard_controler#(
       bubble_EXE_o = 0;
       bubble_MEM_o = 0;
       bubble_WB_o = 0;
-      flush_IF_o = 0;
-      flush_ID_o = 0;
-      flush_EXE_o = 0;
-      flush_MEM_o = 0;
-      flush_WB_o = 0;
+      flush_IF_csr_o = 0;
+      flush_ID_csr_o = 0;
+      flush_EXE_csr_o = 0;
+      flush_MEM_csr_o = 0;
+      flush_WB_csr_o = 0;
+      flush_IF_branch_o = 0;
+      flush_ID_branch_o = 0;
+      flush_EXE_branch_o = 0;
+      flush_MEM_branch_o = 0;
+      flush_WB_branch_o = 0;
       if(pc_csr_nxt_en)begin // Because MEM is rewrite the PC registor, pipeline should be flushed
-        flush_IF_o = 1;
-        flush_ID_o = 1;
-        flush_EXE_o = 1;
+        flush_IF_csr_o = 1;
+        flush_ID_csr_o = 1;
+        flush_EXE_csr_o = 1;
       end else if(pc_branch_nxt_en)begin // Because EXE is rewrite the PC registor, pipeline should be flushed
-        flush_IF_o = 1;
-        flush_ID_o = 1;
-      end else begin
+        flush_IF_branch_o = 1;
+        flush_ID_branch_o = 1;
+      end 
+      // else begin
         if(wb1_cyc_i && !wb1_ack_i)begin // MEM is writing/reading and it hasn't complete yet
           bubble_IF_o = 1;
           bubble_ID_o = 1;
@@ -110,6 +121,6 @@ module hazard_controler#(
         //     bubble_ID_o = 1;
         //   end
         // end
-      end
+      // end
     end
 endmodule
