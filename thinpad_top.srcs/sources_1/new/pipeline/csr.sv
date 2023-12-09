@@ -420,7 +420,9 @@ module Csr#(
               sepc <= pc_now_i;
               scause.interrupt <= 1'b0;
               scause.exception_code <= priviledge_mode_reg == PRIVILEDGE_MODE_U ? 31'h8 : 31'h9;
-              msstatus.spp <= priviledge_mode_reg; 
+              msstatus.spp <= priviledge_mode_reg;
+              msstatus.spie <= msstatus.sie; 
+              msstatus.sie <= 1'b0; 
               pc_next_en <= 1;
               pc_next_o <= {stvec[31:2],2'b00};
               priviledge_mode_reg <= PRIVILEDGE_MODE_S;
@@ -430,6 +432,8 @@ module Csr#(
               mcause.interrupt <= 1'b0;
               mcause.exception_code <= (priviledge_mode_reg == PRIVILEDGE_MODE_U)? 31'h8 : ((priviledge_mode_reg == PRIVILEDGE_MODE_S) ? 31'h9 : 31'hb);
               msstatus.mpp <= priviledge_mode_reg;
+              msstatus.mpie <= msstatus.mie;
+              msstatus.mie <= 1'b0;
               pc_next_en <= 1;
               pc_next_o <= {mtvec[31:2],2'b00};
               priviledge_mode_reg <= PRIVILEDGE_MODE_M;
@@ -460,6 +464,8 @@ module Csr#(
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= if_exception_code_i;
                 msstatus.spp <= priviledge_mode_reg;
+                msstatus.spie <= msstatus.sie;
+                msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {mtvec[31:2],2'b00};
@@ -469,6 +475,8 @@ module Csr#(
                 mcause.interrupt <= 1'b0;
                 mcause.exception_code <= if_exception_code_i;
                 msstatus.mpp <= priviledge_mode_reg;
+                msstatus.mpie <= msstatus.mie;
+                msstatus.mie <= 1'b0;
                 mepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {stvec[31:2],2'b00};
@@ -482,6 +490,8 @@ module Csr#(
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= id_exception_instr_i;
                 msstatus.spp <= priviledge_mode_reg;
+                msstatus.spie <= msstatus.sie;
+                msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {stvec[31:2],2'b00};
@@ -493,6 +503,8 @@ module Csr#(
                 mcause.interrupt <= 1'b0;
                 mcause.exception_code <= 31'h2;
                 msstatus.mpp <= priviledge_mode_reg;
+                msstatus.mpie <= msstatus.mie;
+                msstatus.mie <= 1'b0;
                 mepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {mtvec[31:2],2'b00};
@@ -506,6 +518,8 @@ module Csr#(
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= mem_exception_code_i;
                 msstatus.spp <= priviledge_mode_reg;
+                msstatus.spie <= msstatus.sie;
+                msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {stvec[31:2],2'b00};
@@ -515,6 +529,8 @@ module Csr#(
                 mcause.interrupt <= 1'b0;
                 mcause.exception_code <= mem_exception_code_i;
                 msstatus.mpp <= priviledge_mode_reg;
+                msstatus.mpie <= msstatus.mie;
+                msstatus.mie <= 1'b0;
                 mepc <= pc_now_i;
                 pc_next_en <= 1;
                 pc_next_o <= {mtvec[31:2],2'b00};

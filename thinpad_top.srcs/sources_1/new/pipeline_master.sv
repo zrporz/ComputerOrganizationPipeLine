@@ -884,6 +884,8 @@ module pipeline_master #(
       end
       // EXE
       if(flush_EXE)begin
+        pc_branch_nxt_en <= 0;
+        pc_branch_nxt <= 32'b0;
         if(flush_MEM)begin
           // EXE-MEM
           exme_inst_reg <= 32'b0010011;
