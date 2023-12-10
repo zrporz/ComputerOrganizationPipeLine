@@ -27,12 +27,23 @@ module Csr#(
     input wire[ADDR_WIDTH-1:0] if_exception_addr_i, // Virtual address
     input wire[30:0] mem_exception_code_i, // Load page fault: 13, Store page fault: 15
     input wire[ADDR_WIDTH-1:0] mem_exception_addr_i, // Virtual address
+    input wire mem_state_i,
     input wire[DATA_WIDTH-1:0] id_exception_instr_i, // Illegeal Instruction
     input wire id_exception_instr_wen,
     input wire flush_exe_i, 
     // debug
     input wire [31:0] dip_sw_i,
-    output reg [31:0] leds
+    output reg [31:0] leds,
+    output wire [31:0] msstatus_o,
+    output wire [31:0] msie_o,
+    output wire [31:0] mideleg_o,
+    output wire [31:0] msip_o,
+    output wire [31:0] mtvec_o,
+    output wire [31:0] stvec_o,
+    output wire [31:0] mepc_o,
+    output wire [31:0] sepc_o,
+    output wire [31:0] mcause_o,
+    output wire [31:0] scause_o
 );
     parameter  CSRRC = 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS = 32'b????_????_????_????_?010_????_?111_0011;
@@ -100,6 +111,18 @@ module Csr#(
     // end
     logic[15:0] leds_r;
     assign leds = leds_r;
+    assign msstatus_o = msstatus;
+    assign msie_o = msie;
+    assign mideleg_o = mideleg;
+    assign msip_o = msip;
+    assign mtvec_o = mtvec;
+    assign stvec_o = stvec;
+    assign mepc_o = mepc;
+    assign sepc_o = sepc;
+    assign mcause_o = mcause;
+    assign scause_o = scause;
+
+
     always_comb begin 
       leds_r = 16'h0000;
       case(dip_sw_i)
@@ -538,22 +561,7 @@ module Csr#(
               end
             end
             // For Interrupt (i.e. Time interruption)
-            else if(msip.stip && msie.stie && (priviledge_mode_reg == PRIVILEDGE_MODE_U || (priviledge_mode_reg == PRIVILEDGE_MODE_S && msstatus.sie)))begin
-              // Superior mode time-out interrupt
-              scause.interrupt <= 1'b1;
-              scause.exception_code <= 31'h5;
-              pc_next_en <= 1;
-              pc_next_o <= {stvec[31:2],2'b00};
-              if(flush_exe_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
-                sepc <= pc_next_o;
-              end else begin
-                sepc <= pc_now_i;
-              end
-              msstatus.spp <= priviledge_mode_reg;
-              priviledge_mode_reg <= PRIVILEDGE_MODE_S;
-              msstatus.spie <= msstatus.sie;
-              msstatus.sie <= 1'b0;
-            end else if(msip.mtip && msie.mtie && (priviledge_mode_reg != PRIVILEDGE_MODE_M || msstatus.mie))begin
+            else if(!mem_state_i && msip.mtip && msie.mtie && (priviledge_mode_reg != PRIVILEDGE_MODE_M || msstatus.mie))begin
               // Machine mode time-out interrupt
               mcause.interrupt <= 1'b1;
               mcause.exception_code <= 31'h7;
@@ -577,6 +585,22 @@ module Csr#(
               msstatus.mpie <= msstatus.mie;
               msstatus.mie <= 1'b0;
               priviledge_mode_reg <= PRIVILEDGE_MODE_M;
+            end 
+            else if(!mem_state_i && msip.stip && msie.stie && (priviledge_mode_reg == PRIVILEDGE_MODE_U || (priviledge_mode_reg == PRIVILEDGE_MODE_S && msstatus.sie)))begin
+              // Superior mode time-out interrupt
+              scause.interrupt <= 1'b1;
+              scause.exception_code <= 31'h5;
+              pc_next_en <= 1;
+              pc_next_o <= {stvec[31:2],2'b00};
+              if(flush_exe_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
+                sepc <= pc_next_o;
+              end else begin
+                sepc <= pc_now_i;
+              end
+              msstatus.spp <= priviledge_mode_reg;
+              priviledge_mode_reg <= PRIVILEDGE_MODE_S;
+              msstatus.spie <= msstatus.sie;
+              msstatus.sie <= 1'b0;
             end 
             else begin
               pc_next_en <= 0;
