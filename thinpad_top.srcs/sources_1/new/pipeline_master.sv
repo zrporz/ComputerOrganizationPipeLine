@@ -150,9 +150,11 @@ module pipeline_master #(
   reg [31:0] pc_branch_nxt;
   reg [31:0] pc_csr_nxt;
   reg [31:0] pc_nxt_reg;
+  reg [31:0] pc_predict; // for BTB 
   reg pc_csr_nxt_en;
   reg pc_branch_nxt_en;
   logic pc_if_state; //0:IDLE 1:Fetching Instruction
+  logic branching;
   PcController u_pc_controller(
     .pc_i(pc_reg),
     .pc_seq_nxt_i(pc_seq_nxt),
@@ -160,8 +162,23 @@ module pipeline_master #(
     .pc_branch_nxt_en(pc_branch_nxt_en),
     .pc_csr_nxt_i(pc_csr_nxt),
     .pc_csr_nxt_en(pc_csr_nxt_en),
-    .pc_nxt_o(pc_nxt_reg)
+    .pc_nxt_o(pc_nxt_reg),
+    .branching_o(branching)
+    // add px_predict
+    .pc_predict_nxt_i(pc_predict)
   );
+  
+  PC_BTB u_pc_btb(
+    .clk(clk_i),
+    .rst(rst_i),
+    // for read 
+    .pc_now(pc_reg),          // CHECK: whether to use ifid_pc_now_reg ? 
+    .pc_predict(pc_predict),
+    // for write
+    .branching(branching),    // Computed by PCController. CHECK: whether to use pc_branch_nxt_en (w.o. CSR) ?
+    .exe_pc(exme_pc_now_reg), // alu use idex_pc_now_reg, exme_pc_now_reg <= idex_pc_now_reg
+    .exe_pc_next(pc_nxt_reg), // Computed by PCController.
+  )
   /*=========== PC Controller Module End ===========*/
 
   // IF-ID reg
@@ -705,6 +722,8 @@ module pipeline_master #(
       // IF
       if(flush_IF)begin
         if(flush_ID)begin
+
+          // 这里判断一下 pc_nxt_reg 与多步之前判断出来的 pc_predict 是否一致，若一致就不需要冲刷
           // IF-ID reset to addi x0, x0, 0
           pc_if_state <=1;
           wb0_adr_o_reg <= pc_nxt_reg;
