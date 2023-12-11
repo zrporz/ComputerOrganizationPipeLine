@@ -75,7 +75,7 @@ module pc_btb_table #(
 
         else begin
 
-            if (branching) begin
+            if (branching & (exe_pc != 32'h8000_0000)) begin
 
                btb_table[exe_pc_index].valid <= 1;
                btb_table[exe_pc_index].target_addr <= exe_pc_next;
