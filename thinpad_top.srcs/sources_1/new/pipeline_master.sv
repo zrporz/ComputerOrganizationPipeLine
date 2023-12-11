@@ -1034,17 +1034,18 @@ module pipeline_master #(
             end
             exme_rf_wen <= idex_rf_wen;
 
-            // if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
-            //   // no jump, continue predict
-            //   pc_branch_nxt_en <= 0;
-            //   pc_branch_nxt <= 32'b0;
-            // end else begin
-            //   // jump to pc+4
-            //   pc_branch_nxt_en <= 1;
-            //   pc_branch_nxt <= idex_pc_now_reg + 4;
-            // end
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            // NOTE
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              // no jump, continue predict
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              // jump to pc+4
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
+            // pc_branch_nxt_en <= 0;
+            // pc_branch_nxt <= 32'b0;
 
           end
           R_TYPE: begin
@@ -1061,43 +1062,45 @@ module pipeline_master #(
               
             end
             else begin
-              // if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
-              //   pc_branch_nxt_en <= 0;
-              //   pc_branch_nxt <= 32'b0;
-              // end else begin
-              //   pc_branch_nxt_en <= 1;
-              //   pc_branch_nxt <= idex_pc_now_reg + 4;
-              // end
-              pc_branch_nxt_en <= 0;
-              pc_branch_nxt <= 32'b0;
+              if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+                pc_branch_nxt_en <= 0;
+                pc_branch_nxt <= 32'b0;
+              end else begin
+                pc_branch_nxt_en <= 1;
+                pc_branch_nxt <= idex_pc_now_reg + 4;
+              end
+              // NOTE
+              // pc_branch_nxt_en <= 0;
+              // pc_branch_nxt <= 32'b0;
             end
           end
           I_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            // if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
-            //   pc_branch_nxt_en <= 0;
-            //   pc_branch_nxt <= 32'b0;
-            // end else begin
-            //   pc_branch_nxt_en <= 1;
-            //   pc_branch_nxt <= idex_pc_now_reg + 4;
-            // end
-
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
+            // NOTE
+            // pc_branch_nxt_en <= 0;
+            // pc_branch_nxt <= 32'b0;
           end
           S_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            // if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
-            //   pc_branch_nxt_en <= 0;
-            //   pc_branch_nxt <= 32'b0;
-            // end else begin
-            //   pc_branch_nxt_en <= 1;
-            //   pc_branch_nxt <= idex_pc_now_reg + 4;
-            // end
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
+            // NOTE
+            // pc_branch_nxt_en <= 0;
+            // pc_branch_nxt <= 32'b0;
           end
           B_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
@@ -1181,15 +1184,15 @@ module pipeline_master #(
           default:begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            // if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
-            //   pc_branch_nxt_en <= 0;
-            //   pc_branch_nxt <= 32'b0;
-            // end else begin
-            //   pc_branch_nxt_en <= 1;
-            //   pc_branch_nxt <= idex_pc_now_reg + 4;
-            // end
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
+            // pc_branch_nxt_en <= 0;
+            // pc_branch_nxt <= 32'b0;
           end
         endcase
       end
