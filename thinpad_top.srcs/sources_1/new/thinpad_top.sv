@@ -244,6 +244,7 @@ module thinpad_top (
   logic [ 3:0] wbm1_sel_o;
   logic        wbm1_we_o;
   satp_t satp_o;
+  msstatus_t msstatus_o;
   logic [1:0] priviledge_mode_o;
 
   // mmu_if 的信号
@@ -308,6 +309,7 @@ module thinpad_top (
       .mtime_hi_i(mtime_hi_o),
       // mmu<-cpu<-csr
       .satp_o(satp_o),
+      .msstatus_o(msstatus_o),
       .priviledge_mode_o(priviledge_mode_o),
       // DEBUG
       .dip_sw(dip_sw),
@@ -355,13 +357,14 @@ module thinpad_top (
     .mode_in(priviledge_mode_o),
     // satp
     .satp_in(satp_o),
+    .msstatus_i(msstatus_o),
 
     // mmu_if or mmu_em
     .is_if_mmu(1'b1),
     .query_wen(1'b0),
 
     // exception output
-    .tlb_exception_code(if_exception_code),
+    .exception_code(if_exception_code),
     .if_exception_addr_o(if_exception_addr),
     .id_exception_instr_i(id_exception_instr),
     .id_exception_instr_wen(id_exception_instr_wen),
@@ -398,13 +401,14 @@ module thinpad_top (
     .mode_in(priviledge_mode_o),
     // satp
     .satp_in(satp_o),
+    .msstatus_i(msstatus_o),
 
     // mmu_if or mmu_em
     .is_if_mmu(1'b0),
     .query_wen(mmu_mem_we_o), // TODO Discuss with team membears
 
     // exception output
-    .tlb_exception_code(mem_exception_code),
+    .exception_code(mem_exception_code),
     .mem_exception_addr_o(mem_exception_addr),
     .flush_tlb_i(flush_tlb_o)
   );

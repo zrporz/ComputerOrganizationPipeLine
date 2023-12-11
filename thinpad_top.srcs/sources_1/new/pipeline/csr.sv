@@ -21,6 +21,7 @@ module Csr#(
     input wire [DATA_WIDTH-1:0] mtimeh_i,
     // mmu -> cpu -> csr
     output wire [ADDR_WIDTH-1:0] satp_o,
+    output wire [31:0] msstatus_o,
     output reg flush_tlb_o,
     // pipeline -> csr
     input wire[30:0] if_exception_code_i, // Instruction page fault: 12
@@ -33,17 +34,16 @@ module Csr#(
     input wire flush_exe_i, 
     // debug
     input wire [31:0] dip_sw_i,
-    output reg [31:0] leds,
-    output wire [31:0] msstatus_o,
-    output wire [31:0] msie_o,
-    output wire [31:0] mideleg_o,
-    output wire [31:0] msip_o,
-    output wire [31:0] mtvec_o,
-    output wire [31:0] stvec_o,
-    output wire [31:0] mepc_o,
-    output wire [31:0] sepc_o,
-    output wire [31:0] mcause_o,
-    output wire [31:0] scause_o
+    output reg [31:0] leds
+    // output wire [31:0] msie_o,
+    // output wire [31:0] mideleg_o,
+    // output wire [31:0] msip_o,
+    // output wire [31:0] mtvec_o,
+    // output wire [31:0] stvec_o,
+    // output wire [31:0] mepc_o,
+    // output wire [31:0] sepc_o,
+    // output wire [31:0] mcause_o,
+    // output wire [31:0] scause_o
 );
     parameter  CSRRC = 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS = 32'b????_????_????_????_?010_????_?111_0011;
@@ -104,6 +104,7 @@ module Csr#(
     logic[31:0] uimm;
     // reg [31:0] previous_csr_pc_reg;
     assign satp_o = satp;
+    assign msstatus_o = msstatus;
     // always_comb begin
     //   if(mip.mtip && mie.mtie)begin // time interrupt exist and machine mode enable all interrupt
         
@@ -111,16 +112,15 @@ module Csr#(
     // end
     logic[15:0] leds_r;
     assign leds = leds_r;
-    assign msstatus_o = msstatus;
-    assign msie_o = msie;
-    assign mideleg_o = mideleg;
-    assign msip_o = msip;
-    assign mtvec_o = mtvec;
-    assign stvec_o = stvec;
-    assign mepc_o = mepc;
-    assign sepc_o = sepc;
-    assign mcause_o = mcause;
-    assign scause_o = scause;
+    // assign msie_o = msie;
+    // assign mideleg_o = mideleg;
+    // assign msip_o = msip;
+    // assign mtvec_o = mtvec;
+    // assign stvec_o = stvec;
+    // assign mepc_o = mepc;
+    // assign sepc_o = sepc;
+    // assign mcause_o = mcause;
+    // assign scause_o = scause;
 
 
     always_comb begin 
@@ -249,8 +249,13 @@ module Csr#(
         casez(inst_i)
           CSRRC:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
               case(inst_i[31:20])
                 MSTATUS: msstatus <= msstatus & ~(rf_rdata_a_i & `MSTATUS_MASK);
@@ -279,8 +284,13 @@ module Csr#(
           end
           CSRRCI:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             if(inst_i[19:15])begin // only write csr when rs1 is not x0
               case(inst_i[31:20])
                 MSTATUS: msstatus <= msstatus & ~(uimm & `MSTATUS_MASK);
@@ -309,8 +319,13 @@ module Csr#(
           end
           CSRRS:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             if(inst_i[19:15])begin
               case(inst_i[31:20])
                 MSTATUS: msstatus <= msstatus | (rf_rdata_a_i & `MSTATUS_MASK);
@@ -339,8 +354,13 @@ module Csr#(
           end
           CSRRSI:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             if(inst_i[19:15])begin
               case(inst_i[31:20])
                 MSTATUS: msstatus <= msstatus | (uimm & `MSTATUS_MASK);
@@ -369,8 +389,13 @@ module Csr#(
           end
           CSRRW:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             // For csr write, don't need rs1!=x0 or uimm != 0
             case(inst_i[31:20])
               MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (rf_rdata_a_i & `MSTATUS_MASK);
@@ -398,8 +423,13 @@ module Csr#(
           end
           CSRRWI:begin
             flush_tlb_o <= 0;
-            pc_next_en <= 0;
-            pc_next_o <= 32'b0;
+            if(inst_i[31:20] ==SATP)begin
+              pc_next_en <= 1;
+              pc_next_o <= pc_now_i+4;
+            end else begin
+              pc_next_en <= 0;
+              pc_next_o <= 32'b0;
+            end
             case(inst_i[31:20])
               MSTATUS: msstatus <= (msstatus & ~`MSTATUS_MASK) | (uimm & `MSTATUS_MASK);
               SSTATUS: msstatus <= (msstatus & ~`SSTATUS_MASK) | (uimm & `SSTATUS_MASK);
@@ -424,9 +454,9 @@ module Csr#(
               PMPCFG0: pmpcfg0 <=  uimm;            
             endcase
           end
-          SFENCE_VMA:begin
-            flush_tlb_o <= 1;
-          end
+          // SFENCE_VMA:begin
+          //   // flush_tlb_o <= 1;
+          // end
           EBREAK:begin
             flush_tlb_o <= 0;
             mepc <= pc_now_i; 
@@ -511,7 +541,7 @@ module Csr#(
               if(medeleg[2])begin
                 stval <= id_exception_instr_i;
                 scause.interrupt <= 1'b0;
-                scause.exception_code <= id_exception_instr_i;
+                scause.exception_code <= 32'h2;
                 msstatus.spp <= priviledge_mode_reg;
                 msstatus.spie <= msstatus.sie;
                 msstatus.sie <= 1'b0;
