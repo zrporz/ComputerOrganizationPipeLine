@@ -648,7 +648,16 @@ module Csr#(
               if(flush_mem_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
                 sepc <= pc_next_o;
               end else begin
-                sepc <= pc_now_i;
+                if(pc_now_i!=32'h8000_0000)begin
+                  sepc <= pc_now_i;
+                end else if(idex_pc_now_i!=32'h8000_0000)begin
+                  sepc <= idex_pc_now_i;
+                end else if(ifid_pc_now_i!=32'h8000_0000)begin
+                  sepc <= ifid_pc_now_i;
+                end 
+                else begin
+                  sepc <= wb0_pc_now_i;
+                end 
               end
               msstatus.spp <= priviledge_mode_reg;
               priviledge_mode_reg <= PRIVILEDGE_MODE_S;
