@@ -19,8 +19,8 @@ module pc_btb_table #(
        [5:2]  index
        [1:0]  offset = 2'b00
     */
-    logic pc_now_tag  [25:0];
-    logic pc_now_index [3:0];
+    logic [25:0] pc_now_tag ;
+    logic [3:0] pc_now_index ;
     assign pc_now_tag = pc_now[31:6];
     assign pc_now_index = pc_now[5:2];
 
@@ -36,8 +36,8 @@ module pc_btb_table #(
     btb_entry current_btb_entry;
     assign current_btb_entry = btb_table[pc_now_index];
 
-    logic exe_pc_tag  [25:0];
-    logic exe_pc_index [3:0];
+    logic [25:0] exe_pc_tag  ;
+    logic  [3:0] exe_pc_index;
     assign exe_pc_index = exe_pc[5:2];
     assign exe_pc_tag = exe_pc[31:6];
 
