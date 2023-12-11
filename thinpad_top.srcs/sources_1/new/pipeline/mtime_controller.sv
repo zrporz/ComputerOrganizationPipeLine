@@ -23,6 +23,8 @@ module MtimeController #(
 );
     reg[64:0] mtime_reg;
     reg[64:0] mtimecmp_reg;
+    reg[3:0] mt_reg;
+
     logic state;
     always_comb begin
       mtime_lo_o = mtime_reg[31:0];
@@ -33,6 +35,7 @@ module MtimeController #(
         state <= 1;
         mtime_reg <= 64'b0;
         mtimecmp_reg <= 64'b0;
+        mt_reg <= 4'b0;
       end else begin
         if(state)begin
           if (wb_cyc_i && wb_stb_i) begin
@@ -71,7 +74,12 @@ module MtimeController #(
             state <= 0;
           end else if(mtimecmp_reg)begin
             // mtime_reg <= mtime_reg + 64'h100;
-            mtime_reg <= mtime_reg + 64'h1;
+            if(mt_reg == 4'b1111)begin
+              mtime_reg <= mtime_reg + 64'h1;
+              mt_reg <= 4'b0000;
+            end else begin
+              mt_reg <= mt_reg + 4'b0001;
+            end
             mtime_exceed_o <= (mtime_reg >= mtimecmp_reg);
             wb_ack_o <= 0;
             state <= 1;

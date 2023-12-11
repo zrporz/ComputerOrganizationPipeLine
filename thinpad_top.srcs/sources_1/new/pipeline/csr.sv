@@ -12,7 +12,9 @@ module Csr#(
     input wire [ADDR_WIDTH-1:0]  ifid_pc_now_i,
     input wire [ADDR_WIDTH-1:0]  wb0_pc_now_i,
     output reg [DATA_WIDTH-1:0]  rf_wdata_o, // rd
+    output reg csr_timeinterrupt_rfwen_o,
     output reg [1:0] priviledge_mode_o,
+    
     output reg [ADDR_WIDTH-1:0] pc_next_o,
     output reg pc_next_en,
     // mtimer -> cpu -> csr
@@ -22,6 +24,7 @@ module Csr#(
     // mmu -> cpu -> csr
     output wire [ADDR_WIDTH-1:0] satp_o,
     output wire [31:0] msstatus_o,
+    
     output reg flush_tlb_o,
     // pipeline -> csr
     input wire[30:0] if_exception_code_i, // Instruction page fault: 12
@@ -31,19 +34,19 @@ module Csr#(
     input wire mem_state_i,
     input wire[DATA_WIDTH-1:0] id_exception_instr_i, // Illegeal Instruction
     input wire id_exception_instr_wen,
-    input wire flush_exe_i, 
+    input wire flush_mem_i, 
     // debug
     input wire [31:0] dip_sw_i,
-    output reg [31:0] leds
-    // output wire [31:0] msie_o,
-    // output wire [31:0] mideleg_o,
-    // output wire [31:0] msip_o,
-    // output wire [31:0] mtvec_o,
-    // output wire [31:0] stvec_o,
-    // output wire [31:0] mepc_o,
-    // output wire [31:0] sepc_o,
-    // output wire [31:0] mcause_o,
-    // output wire [31:0] scause_o
+    output reg [31:0] leds,
+    output wire [31:0] msie_o,
+    output wire [31:0] mideleg_o,
+    output wire [31:0] msip_o,
+    output wire [31:0] mtvec_o,
+    output wire [31:0] stvec_o,
+    output wire [31:0] mepc_o,
+    output wire [31:0] sepc_o,
+    output wire [31:0] mcause_o,
+    output wire [31:0] scause_o
 );
     parameter  CSRRC = 32'b????_????_????_????_?011_????_?111_0011;
     parameter  CSRRS = 32'b????_????_????_????_?010_????_?111_0011;
@@ -112,15 +115,15 @@ module Csr#(
     // end
     logic[15:0] leds_r;
     assign leds = leds_r;
-    // assign msie_o = msie;
-    // assign mideleg_o = mideleg;
-    // assign msip_o = msip;
-    // assign mtvec_o = mtvec;
-    // assign stvec_o = stvec;
-    // assign mepc_o = mepc;
-    // assign sepc_o = sepc;
-    // assign mcause_o = mcause;
-    // assign scause_o = scause;
+    assign msie_o = msie;
+    assign mideleg_o = mideleg;
+    assign msip_o = msip;
+    assign mtvec_o = mtvec;
+    assign stvec_o = stvec;
+    assign mepc_o = mepc;
+    assign sepc_o = sepc;
+    assign mcause_o = mcause;
+    assign scause_o = scause;
 
 
     always_comb begin 
@@ -249,6 +252,7 @@ module Csr#(
         casez(inst_i)
           CSRRC:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -284,6 +288,7 @@ module Csr#(
           end
           CSRRCI:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -319,6 +324,7 @@ module Csr#(
           end
           CSRRS:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -354,6 +360,7 @@ module Csr#(
           end
           CSRRSI:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[19:15] && inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -389,6 +396,7 @@ module Csr#(
           end
           CSRRW:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -423,6 +431,7 @@ module Csr#(
           end
           CSRRWI:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 1;
             if(inst_i[31:20] ==SATP)begin
               pc_next_en <= 1;
               pc_next_o <= pc_now_i+4;
@@ -459,6 +468,7 @@ module Csr#(
           // end
           EBREAK:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 0;
             mepc <= pc_now_i; 
             mcause.interrupt <= 1'b0;
             mcause.exception_code <= 31'h3;
@@ -469,6 +479,7 @@ module Csr#(
           end
           ECALL:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 0;
             if((priviledge_mode_reg == PRIVILEDGE_MODE_U && medeleg[8]) || (priviledge_mode_reg == PRIVILEDGE_MODE_S && medeleg[9]))begin
               sepc <= pc_now_i;
               scause.interrupt <= 1'b0;
@@ -494,24 +505,30 @@ module Csr#(
           end
           MRET:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= mepc;
             priviledge_mode_reg <= msstatus.mpp;
             msstatus.mie <= msstatus.mpie;
+            csr_timeinterrupt_rfwen_o <= 0;
             // msie.mtie <= 1'b1;
           end
           SRET:begin
             flush_tlb_o <= 0;
+            csr_timeinterrupt_rfwen_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= sepc;
             priviledge_mode_reg <= msstatus.spp;
             msstatus.sie <= msstatus.spie;
+            csr_timeinterrupt_rfwen_o <= 0;
             // msie.stie <= 1'b1; //???
           end
           default:begin
             flush_tlb_o <= 0;
+            
             // Instr page fault
             if(if_exception_code_i)begin
+              csr_timeinterrupt_rfwen_o <= 0;
               if(medeleg[if_exception_code_i])begin 
                 stval <= if_exception_addr_i;
                 scause.interrupt <= 1'b0;
@@ -538,6 +555,7 @@ module Csr#(
             end
             // Invalid instruction
             else if(id_exception_instr_wen)begin
+              csr_timeinterrupt_rfwen_o <= 0;
               if(medeleg[2])begin
                 stval <= id_exception_instr_i;
                 scause.interrupt <= 1'b0;
@@ -566,6 +584,7 @@ module Csr#(
             end
             // mem page fault
             else if(mem_exception_code_i)begin
+              csr_timeinterrupt_rfwen_o <= 0;
               if(medeleg[mem_exception_code_i])begin 
                 stval <= mem_exception_addr_i;
                 scause.interrupt <= 1'b0;
@@ -595,9 +614,10 @@ module Csr#(
               // Machine mode time-out interrupt
               mcause.interrupt <= 1'b1;
               mcause.exception_code <= 31'h7;
+              csr_timeinterrupt_rfwen_o <= 0; /***important***/
               pc_next_en <= 1;
               pc_next_o <= {mtvec[31:2],2'b00};
-              if(flush_exe_i)begin
+              if(flush_mem_i)begin
                 mepc <= pc_next_o;
               end else begin
                 if(pc_now_i!=32'h8000_0000)begin
@@ -619,10 +639,11 @@ module Csr#(
             else if(!mem_state_i && msip.stip && msie.stie && (priviledge_mode_reg == PRIVILEDGE_MODE_U || (priviledge_mode_reg == PRIVILEDGE_MODE_S && msstatus.sie)))begin
               // Superior mode time-out interrupt
               scause.interrupt <= 1'b1;
+              csr_timeinterrupt_rfwen_o <= 0; /***important***/
               scause.exception_code <= 31'h5;
               pc_next_en <= 1;
               pc_next_o <= {stvec[31:2],2'b00};
-              if(flush_exe_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
+              if(flush_mem_i)begin // if time interrupr occure when switch to U-mode from M-mode, we should use if-pc as sepc, rather than exme_pc, because this exme_pc has been flushed!
                 sepc <= pc_next_o;
               end else begin
                 sepc <= pc_now_i;
@@ -633,6 +654,7 @@ module Csr#(
               msstatus.sie <= 1'b0;
             end 
             else begin
+              csr_timeinterrupt_rfwen_o <= 1; /***important***/
               pc_next_en <= 0;
               pc_next_o <= 32'b0;
             end

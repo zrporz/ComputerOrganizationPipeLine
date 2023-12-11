@@ -50,56 +50,56 @@ module pipeline_master #(
 );
 /*============= ila debug module begin ==================*/
   // wire[31:0] msstatus;
-  // wire[31:0] msie;
-  // wire[31:0] mideleg;
-  // wire[31:0] msip;
-  // wire[31:0] mtvec;
-  // wire[31:0] stvec;
-  // wire[31:0] mepc;
-  // wire[31:0] sepc;
-  // wire[31:0] mcause;
-  // wire[31:0] scause;
-  // ila_2 u_ila(
-  //   .clk(clk_i),
-  //   .probe0(wb0_cyc_o),
-  //   .probe1(wb0_stb_o),
-  //   .probe2(wb0_ack_i),
-  //   .probe3(wb0_exc_i),
-  //   .probe4(wb0_adr_o),
-  //   .probe5(wb0_dat_o),
-  //   .probe6(wb0_dat_i),
-  //   .probe7(wb0_sel_o),
-  //   .probe8(wb0_we_o),
-  //   .probe9(wb1_cyc_o),
-  //   .probe10(wb1_stb_o),
-  //   .probe11(wb1_ack_i),
-  //   .probe12(wb1_exc_i),
-  //   .probe13(wb1_adr_o),
-  //   .probe14(wb1_dat_o),
-  //   .probe15(wb1_dat_i),
-  //   .probe16(wb1_sel_o),
-  //   .probe17(wb1_we_o),
-  //   .probe18(mtime_exceed_i),
-  //   .probe19(satp_o),
-  //   .probe20(priviledge_mode_o),
-  //   .probe21(if_exception_code_i),
-  //   .probe22(if_exception_addr_i),
-  //   .probe23(mem_exception_code_i),
-  //   .probe24(mem_exception_addr_i),
-  //   .probe25(id_exception_instr_i),
-  //   .probe26(id_exception_instr_wen),
-  //   .probe27(flush_tlb_o),
-  //   .probe28(msstatus),
-  //   .probe29(msie),
-  //   .probe30(mideleg),
-  //   .probe31(msip),
-  //   .probe32(mtvec),
-  //   .probe33(stvec),
-  //   .probe34(mepc),
-  //   .probe35(sepc),
-  //   .probe36(mcause),
-  //   .probe37(scause)
-  // );
+  wire[31:0] msie;
+  wire[31:0] mideleg;
+  wire[31:0] msip;
+  wire[31:0] mtvec;
+  wire[31:0] stvec;
+  wire[31:0] mepc;
+  wire[31:0] sepc;
+  wire[31:0] mcause;
+  wire[31:0] scause;
+  ila_2 u_ila(
+    .clk(clk_i),
+    .probe0(wb0_cyc_o),
+    .probe1(wb0_stb_o),
+    .probe2(wb0_ack_i),
+    .probe3(wb0_exc_i),
+    .probe4(wb0_adr_o),
+    .probe5(wb0_dat_o),
+    .probe6(wb0_dat_i),
+    .probe7(wb0_sel_o),
+    .probe8(wb0_we_o),
+    .probe9(wb1_cyc_o),
+    .probe10(wb1_stb_o),
+    .probe11(wb1_ack_i),
+    .probe12(wb1_exc_i),
+    .probe13(wb1_adr_o),
+    .probe14(wb1_dat_o),
+    .probe15(wb1_dat_i),
+    .probe16(wb1_sel_o),
+    .probe17(wb1_we_o),
+    .probe18(mtime_exceed_i),
+    .probe19(satp_o),
+    .probe20(priviledge_mode_o),
+    .probe21(if_exception_code_i),
+    .probe22(if_exception_addr_i),
+    .probe23(mem_exception_code_i),
+    .probe24(mem_exception_addr_i),
+    .probe25(id_exception_instr_i),
+    .probe26(id_exception_instr_wen),
+    .probe27(flush_tlb_o),
+    .probe28(msstatus_o),
+    .probe29(msie),
+    .probe30(mideleg),
+    .probe31(msip),
+    .probe32(mtvec),
+    .probe33(stvec),
+    .probe34(mepc),
+    .probe35(sepc),
+    .probe36(mcause),
+    .probe37(scause)
+  );
 /*============= ila debug module end ==================*/
   reg[31:0] wb0_adr_o_reg;
   assign wb0_adr_o = wb0_adr_o_reg;
@@ -239,7 +239,7 @@ module pipeline_master #(
     .we(rf_we_o)
   );
   always_comb begin
-    rf_we_o = mewb_rf_wen;
+    rf_we_o = mewb_rf_wen && csr_timeinterrupt_rfwen;
     rf_waddr_o = mewb_rf_waddr_reg;
     rf_wdata_o = mewb_rf_wdata_reg;
   end
@@ -583,13 +583,16 @@ module pipeline_master #(
   /* CSR's read/write is carried out in MEM */
   wire[31:0] rf_wdata_csr;
   wire mem_state_i;
+  reg csr_timeinterrupt_rfwen;
   assign mem_state_i = exme_mem_en || exme_state; 
+  // assign mem_state_i = wb1_cyc_o; 
   Csr u_csr(
     .clk_i(clk_i),
     .rst_i(rst_i),
     .inst_i(exme_inst_reg),
     .rf_rdata_a_i(exme_rf_rdata_a_reg),
     .rf_wdata_o(rf_wdata_csr),
+    .csr_timeinterrupt_rfwen_o(csr_timeinterrupt_rfwen),
     .priviledge_mode_o(priviledge_mode_o),
     .pc_now_i(exme_pc_now_reg),
     .idex_pc_now_i(idex_pc_now_reg),
@@ -613,19 +616,19 @@ module pipeline_master #(
     // Illegal instruction
     .id_exception_instr_i(exme_exception_instr_reg),
     .id_exception_instr_wen(exme_exception_instr_wen_reg),
-    .flush_exe_i(flush_csr_EXE),
+    .flush_mem_i(flush_csr_MEM),
     .leds(leds),
-    .dip_sw_i(dip_sw)
+    .dip_sw_i(dip_sw),
     // .msstatus_o(msstatus),
-    // .msie_o(msie),
-    // .mideleg_o(mideleg),
-    // .msip_o(msip),
-    // .mtvec_o(mtvec),
-    // .stvec_o(stvec),
-    // .mepc_o(mepc),
-    // .sepc_o(sepc),
-    // .mcause_o(mcause),
-    // .scause_o(scause)
+    .msie_o(msie),
+    .mideleg_o(mideleg),
+    .msip_o(msip),
+    .mtvec_o(mtvec),
+    .stvec_o(stvec),
+    .mepc_o(mepc),
+    .sepc_o(sepc),
+    .mcause_o(mcause),
+    .scause_o(scause)
   );
   /*=========== CSR MODULE END ===========*/
   always_ff @ (posedge clk_i) begin
@@ -832,8 +835,8 @@ module pipeline_master #(
           LUI:begin // do nothing
             idex_exception_instr_wen_reg <= 0;
             idex_alu_op_reg <= ALU_ADD;
-            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�????????, �????????级一级传下去
-            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�????????
+            idex_mem_en <= 0;  // 会不会在 MEM 阶段对内存进行读写请�?????????, �?????????级一级传下去
+            idex_rf_wen <= 1;  // 会不会在 WB 阶段写回寄存�?????????
           end
           BEQ_BNE_BLT_BGE_BLTU_BGTU:begin // PC+imm
             idex_exception_instr_wen_reg <= 0;
@@ -1102,11 +1105,13 @@ module pipeline_master #(
         mewb_rf_waddr_reg <= 5'b0;
         mewb_rf_wdata_reg <= 32'b0;
         // mewb_rpc_wdata_reg <= 32'b0;
-        // wb1_cyc_o <= 1'b0;
-        // wb1_stb_o <= 1'b0;
-        // exme_state <= 1'b0;
+        wb1_cyc_o <= 1'b0;
+        wb1_stb_o <= 1'b0;
+        exme_state <= 1'b0;
 
         mewb_instr_type_reg <= I_TYPE;
+        // wb1_cyc_o <= 1'b0;
+        // wb1_stb_o <= 1'b0;
         // mewb_rpc_wen <= 0;
 
         // end
@@ -1177,7 +1182,7 @@ module pipeline_master #(
                         end
                       end
                     end else if(exme_inst_reg_copy[14:12] == 3'b100) begin
-                      // LBU, 零扩�???
+                      // LBU, 零扩�????
                       if(exme_bias[1:0]==2'b0) begin
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[7:0]};
                       end else if(exme_bias[1:0]==2'b01) begin
@@ -1188,7 +1193,7 @@ module pipeline_master #(
                         mewb_rf_wdata_reg <= {24'b0, wb1_dat_i[31:24]};
                       end
                     end else if(exme_inst_reg_copy[14:12] == 3'b001)begin
-                      // LH, 符号位扩�???
+                      // LH, 符号位扩�????
                       if(exme_bias[1:0]==2'b0) begin
                         if (wb1_dat_i[15]) begin
                           mewb_rf_wdata_reg <= {16'hffff, wb1_dat_i[15:0]};
@@ -1203,7 +1208,7 @@ module pipeline_master #(
                         end
                       end
                     end else if(exme_inst_reg_copy[14:12] == 3'b101)begin
-                      // LHU, 零扩�???
+                      // LHU, 零扩�????
                       if(exme_bias[1:0]==2'b0) begin
                         mewb_rf_wdata_reg <= {16'b0, wb1_dat_i[15:0]};
                       end else begin
@@ -1231,7 +1236,7 @@ module pipeline_master #(
                 LB_LW_LH_LBU_LHU: begin
                   wb1_we_o <= 1'b0;
                   if((exme_inst_reg[14:12] == 3'b000) || (exme_inst_reg[14:12] == 3'b100))begin //LB, LBU
-                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);  // 左移 0,1,2,3 �???
+                    wb1_sel_o <= (4'b0001 << exme_alu_result_reg[1:0]);  // 左移 0,1,2,3 �????
                     // wb1_sel_o <= 4'b0001;
                   end else if ((exme_inst_reg[14:12] == 3'b001) || (exme_inst_reg[14:12] == 3'b101)) begin
                     // LH, LHU
