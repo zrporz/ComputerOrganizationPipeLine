@@ -678,7 +678,7 @@ module pipeline_master #(
       idex_rf_rdata_b_reg <= 32'b0;
       idex_rf_waddr_reg <= 5'b0;
       idex_imm_gen_reg <= 32'b0;
-      idex_pc_now_reg <= 32'h8000_0000; // No matter what the pc is,  this is an addi instruction, so pc_now is not important!
+      idex_pc_now_reg <= 32'h8000_0004; // No matter what the pc is,  this is an addi instruction, so pc_now is not important!
       idex_alu_op_reg <= ALU_ADD;
       idex_use_rs2 <= 1'b0;
       idex_mem_en <= 0;
@@ -700,7 +700,7 @@ module pipeline_master #(
       exme_instr_type_reg <= I_TYPE;
       exme_rf_wen <= 1; // Same to above
       // exme_rpc_wen <= 0;
-      exme_pc_now_reg <= 32'h8000_0000;
+      exme_pc_now_reg <= 32'h8000_0008;
       exme_state <= 0;
       exme_bias <= 0;
       exme_inst_reg_copy <= 32'b0010011;
