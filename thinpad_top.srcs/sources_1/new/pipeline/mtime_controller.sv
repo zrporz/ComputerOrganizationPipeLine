@@ -35,7 +35,7 @@ module MtimeController #(
         state <= 1;
         mtime_reg <= 64'b0;
         mtimecmp_reg <= 64'b0;
-        mt_reg <= 4'b0;
+        mt_reg <= 4'b0000;
       end else begin
         if(state)begin
           if (wb_cyc_i && wb_stb_i) begin

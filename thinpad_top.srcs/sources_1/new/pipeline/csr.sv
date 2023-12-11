@@ -32,6 +32,8 @@ module Csr#(
     input wire[30:0] mem_exception_code_i, // Load page fault: 13, Store page fault: 15
     input wire[ADDR_WIDTH-1:0] mem_exception_addr_i, // Virtual address
     input wire mem_state_i,
+    input wire bubble_MEM_i,
+    input wire flush_MEM_i,
     input wire[DATA_WIDTH-1:0] id_exception_instr_i, // Illegeal Instruction
     input wire id_exception_instr_wen,
     input wire flush_mem_i, 
