@@ -55,7 +55,7 @@ module hazard_controler#(
         flush_IF_csr_o = 1;
         flush_ID_csr_o = 1;
         flush_EXE_csr_o = 1;
-        flush_MEM_branch_o = 1;
+        flush_MEM_csr_o = 1;
       end else if(pc_branch_nxt_en)begin // Because EXE is rewrite the PC registor, pipeline should be flushed
         flush_IF_branch_o = 1;
         flush_ID_branch_o = 1;
