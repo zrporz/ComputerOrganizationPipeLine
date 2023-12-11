@@ -1,6 +1,7 @@
-`include "../headers/btb.svh"
-module PC_BTB #(
-    parameter ADDR_WIDTH = 32
+`include "./headers/btb.svh"
+module pc_btb_table #(
+    parameter ADDR_WIDTH = 32,
+    parameter DATA_WIDTH = 32
 )(
     input wire clk,
     input wire rst,
@@ -11,7 +12,7 @@ module PC_BTB #(
     input wire branching, 
     input wire [ADDR_WIDTH-1:0] exe_pc,
     input wire [ADDR_WIDTH-1:0] exe_pc_next
-)
+);
 
     /* pc_now:
        [31:6] tag
@@ -38,7 +39,7 @@ module PC_BTB #(
     logic exe_pc_tag  [25:0];
     logic exe_pc_index [3:0];
     assign exe_pc_index = exe_pc[5:2];
-    assign exe_pc_tag = exe_pc[31:6]
+    assign exe_pc_tag = exe_pc[31:6];
 
 
     // get pc_predict, combinational logic
@@ -47,7 +48,7 @@ module PC_BTB #(
         if (current_btb_entry.valid & (current_btb_entry.source_tag == pc_now_tag)) begin
             pc_predict = current_btb_entry.target_addr;
         end else begin
-            pc_predict = pc_now + 4;
+            pc_predict = 0;
         end
     end
 
@@ -80,6 +81,7 @@ module PC_BTB #(
                btb_table[exe_pc_index].target_addr <= exe_pc_next;
                btb_table[exe_pc_index].source_tag <= exe_pc_tag;
 
+            end
         end
     end
 

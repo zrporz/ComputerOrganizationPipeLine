@@ -48,16 +48,16 @@ module pipeline_master #(
     output wire flush_tlb_o
 );
 /*============= ila debug module begin ==================*/
-  // wire[31:0] msstatus;
-  // wire[31:0] msie;
-  // wire[31:0] mideleg;
-  // wire[31:0] msip;
-  // wire[31:0] mtvec;
-  // wire[31:0] stvec;
-  // wire[31:0] mepc;
-  // wire[31:0] sepc;
-  // wire[31:0] mcause;
-  // wire[31:0] scause;
+  wire[31:0] msstatus;
+  wire[31:0] msie;
+  wire[31:0] mideleg;
+  wire[31:0] msip;
+  wire[31:0] mtvec;
+  wire[31:0] stvec;
+  wire[31:0] mepc;
+  wire[31:0] sepc;
+  wire[31:0] mcause;
+  wire[31:0] scause;
   // ila_2 u_ila(
   //   .clk(clk_i),
   //   .probe0(wb0_cyc_o),
@@ -163,12 +163,12 @@ module pipeline_master #(
     .pc_csr_nxt_i(pc_csr_nxt),
     .pc_csr_nxt_en(pc_csr_nxt_en),
     .pc_nxt_o(pc_nxt_reg),
-    .branching_o(branching)
+    .branching_o(branching),
     // add px_predict
     .pc_predict_nxt_i(pc_predict)
   );
   
-  PC_BTB u_pc_btb(
+  pc_btb_table u_pc_btb_table(
     .clk(clk_i),
     .rst(rst_i),
     // for read 
@@ -176,9 +176,9 @@ module pipeline_master #(
     .pc_predict(pc_predict),
     // for write
     .branching(branching),    // Computed by PCController. CHECK: whether to use pc_branch_nxt_en (w.o. CSR) ?
-    .exe_pc(exme_pc_now_reg), // alu use idex_pc_now_reg, exme_pc_now_reg <= idex_pc_now_reg
-    .exe_pc_next(pc_nxt_reg), // Computed by PCController.
-  )
+    .exe_pc(idex_pc_now_reg), // alu use idex_pc_now_reg, exme_pc_now_reg <= idex_pc_now_reg
+    .exe_pc_next(pc_nxt_reg) // Computed by PCController.
+  );
   /*=========== PC Controller Module End ===========*/
 
   // IF-ID reg
@@ -1033,33 +1033,62 @@ module pipeline_master #(
               exme_alu_result_reg <= idex_imm_gen_reg;
             end
             exme_rf_wen <= idex_rf_wen;
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              // no jump, continue predict
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              // jump to pc+4
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
+
           end
           R_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
             if(idex_inst_reg[6:0] == JALR)begin
               // exme_rpc_wen <= 1;
-              pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+              if (ifid_pc_now_reg != alu_result_i) begin
+                pc_branch_nxt_en <= 1;
+              end else begin
+                pc_branch_nxt_en <= 0;
+              end
+              
             end
             else begin
-              pc_branch_nxt_en <= 0;
-              pc_branch_nxt <= 32'b0;
+              if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+                pc_branch_nxt_en <= 0;
+                pc_branch_nxt <= 32'b0;
+              end else begin
+                pc_branch_nxt_en <= 1;
+                pc_branch_nxt <= idex_pc_now_reg + 4;
+              end
             end
           end
           I_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
           end
           S_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
           end
           B_TYPE: begin
             exme_alu_result_reg <= alu_result_i;
@@ -1069,29 +1098,61 @@ module pipeline_master #(
               // exme_rpc_wen <= 1;
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
+
             end else if ((idex_inst_reg[14:12] == 3'b000) && idex_rf_rdata_a_reg == idex_rf_rdata_b_reg ) begin
               // BEQ
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
+
             end else if ((idex_inst_reg[14:12] == 3'b100) && ($signed(idex_rf_rdata_a_reg) < $signed(idex_rf_rdata_b_reg))) begin
               // BLT
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
             end else if ((idex_inst_reg[14:12] == 3'b101) && !($signed(idex_rf_rdata_a_reg) < $signed(idex_rf_rdata_b_reg))) begin
               // BGE
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
             end else if ((idex_inst_reg[14:12] == 3'b110) && (idex_rf_rdata_a_reg < idex_rf_rdata_b_reg)) begin
               // BLTU
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
             end else if ((idex_inst_reg[14:12] == 3'b111) && !(idex_rf_rdata_a_reg < idex_rf_rdata_b_reg)) begin
               // BGEU
               pc_branch_nxt_en <= 1;
               pc_branch_nxt <= alu_result_i;
+
+              if (ifid_pc_now_reg == alu_result_i) begin
+                pc_branch_nxt_en <= 0;
+              end
             end else begin
-              pc_branch_nxt_en <= 0;
-              pc_branch_nxt <= 32'b0;
+
+              if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+                pc_branch_nxt_en <= 0;
+                pc_branch_nxt <= 32'b0;
+              end else begin
+                pc_branch_nxt_en <= 1;
+                pc_branch_nxt <= idex_pc_now_reg + 4;
+              end
               // exme_rpc_wen <= 0;
             end
           end
@@ -1099,14 +1160,25 @@ module pipeline_master #(
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
             // exme_rpc_wen <= 1;
-            pc_branch_nxt_en <= 1;
+
             pc_branch_nxt <= alu_result_i;
+
+            if (idex_pc_now_reg != alu_result_i) begin
+              pc_branch_nxt_en <= 1;
+            end else begin
+              pc_branch_nxt_en <= 0;
+            end
           end
           default:begin
             exme_alu_result_reg <= alu_result_i;
             exme_rf_wen <= idex_rf_wen;
-            pc_branch_nxt_en <= 0;
-            pc_branch_nxt <= 32'b0;
+            if (ifid_pc_now_reg == idex_pc_now_reg + 4) begin
+              pc_branch_nxt_en <= 0;
+              pc_branch_nxt <= 32'b0;
+            end else begin
+              pc_branch_nxt_en <= 1;
+              pc_branch_nxt <= idex_pc_now_reg + 4;
+            end
           end
         endcase
       end

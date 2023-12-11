@@ -20,19 +20,19 @@ module PcController#(
     logic [ADDR_WIDTH-1:0] pc_nxt;
     always_comb begin
        pc_nxt = pc_i;
-       branching = 1;    // bubble
+       branching_o = 1;    // bubble
        if(pc_csr_nxt_en)begin
           pc_nxt = pc_csr_nxt_i;
-          branching = 1; // csr
+          branching_o = 1; // csr
        end else if(pc_branch_nxt_en)begin
           pc_nxt = pc_branch_nxt_i;
-          branching = 1; // normal branch
+          branching_o = 1; // normal branch
        end else if(pc_predict_nxt_i)begin
           pc_nxt = pc_predict_nxt_i;
-          branching = 0;
+          branching_o = 0;
        end else if(pc_seq_nxt_i)begin
           pc_nxt = pc_seq_nxt_i;
-          branching = 0; // +4 or bubble ?
+          branching_o = 0; // +4 or bubble ?
        end
     end
     assign pc_nxt_o = pc_nxt;
