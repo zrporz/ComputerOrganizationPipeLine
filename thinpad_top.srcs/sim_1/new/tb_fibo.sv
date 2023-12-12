@@ -97,86 +97,157 @@ module tb;
     uart.pc_send_byte(8'h41); // ASCII 'A'
     $display("send A");
 
-    uart.pc_send_byte(8'h08);
+    uart.pc_send_byte(8'h04);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h10);
     #10000;
-    uart.pc_send_byte(8'h80); //send addr = 0x80100008
+    uart.pc_send_byte(8'h80); //send addr = 0x80100004
     #10000;
-    $display("send 80100008"); 
+    $display("send 80100004"); 
 
     #10000;
-    uart.pc_send_byte(8'h1c);
+    uart.pc_send_byte(8'h38);
     #10000;
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h00);
     #10000;
-    uart.pc_send_byte(8'h00); //send num = 0x0000001c
-    $display("send 0x0000001c (28)");
+    uart.pc_send_byte(8'h00); //send num = 0x00000038
+    $display("send 00000038");
 
     #10000;
-    uart.pc_send_byte(8'hb7);
+    uart.pc_send_byte(8'h13);
+    #10000;
+    uart.pc_send_byte(8'h05);
+    #10000;
+    uart.pc_send_byte(8'h10);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("li a0, 1");
+
+    #10000;
+    uart.pc_send_byte(8'h93);
+    #10000;
+    uart.pc_send_byte(8'h05);
+    #10000;
+    uart.pc_send_byte(8'h10);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("li a1, 1");
+    
+    #10000;
+    uart.pc_send_byte(8'h13);
+    #10000;
+    uart.pc_send_byte(8'h06);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("li a2, 0");
+    
+    #10000;
+    uart.pc_send_byte(8'h93);
     #10000;
     uart.pc_send_byte(8'h02);
     #10000;
     uart.pc_send_byte(8'h00);
     #10000;
-    uart.pc_send_byte(8'h04);
-    $display("lui t0,0x4000");
+    uart.pc_send_byte(8'h00);
+    $display("li t0, 0");
 
+    #10000;
+    uart.pc_send_byte(8'h13);
+    #10000;
+    uart.pc_send_byte(8'h03);
+    #10000;
+    uart.pc_send_byte(8'ha0);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("li t1, 10");
+
+    #10000;
+    uart.pc_send_byte(8'hb7);
+    #10000;
+    uart.pc_send_byte(8'h04);
+    #10000;
+    uart.pc_send_byte(8'hc1);
+    #10000;
+    uart.pc_send_byte(8'h7f);
+    #10000;
+    $display("lui     s1,0x7fc10");
+
+    #10000;
+    uart.pc_send_byte(8'h23);
+    #10000;
+    uart.pc_send_byte(8'ha0);
+    #10000;
+    uart.pc_send_byte(8'ha4);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    #10000;
+    $display("sw      a0,0(s1)");
+
+    #10000;
+    uart.pc_send_byte(8'h33);
+    #10000;
+    uart.pc_send_byte(8'h06);
+    #10000;
+    uart.pc_send_byte(8'hb5);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("add a2, a0, a1");
+    
+    #10000;
+    uart.pc_send_byte(8'h33);
+    #10000;
+    uart.pc_send_byte(8'h85);
+    #10000;
+    uart.pc_send_byte(8'h05);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("add a0, a1, x0");
+    
+    #10000;
+    uart.pc_send_byte(8'hb3);
+    #10000;
+    uart.pc_send_byte(8'h05);
+    #10000;
+    uart.pc_send_byte(8'h06);
+    #10000;
+    uart.pc_send_byte(8'h00);
+    $display("add a1, a2, x0");
+    
     #10000;
     uart.pc_send_byte(8'h93);
     #10000;
     uart.pc_send_byte(8'h82);
     #10000;
-    uart.pc_send_byte(8'hf2);
-    #10000;
-    uart.pc_send_byte(8'hff);
-    $display("addi t0,t0,-1");
-    
-    #10000;
-    uart.pc_send_byte(8'h13);
-    #10000;
-    uart.pc_send_byte(8'h03);
+    uart.pc_send_byte(8'h12);
     #10000;
     uart.pc_send_byte(8'h00);
-    #10000;
-    uart.pc_send_byte(8'h00);
-    $display("li t1, 0");
+    $display("addi t0, t0, 1");
     
     #10000;
     uart.pc_send_byte(8'h93);
     #10000;
-    uart.pc_send_byte(8'h03);
+    uart.pc_send_byte(8'h84);
     #10000;
-    uart.pc_send_byte(8'h10);
-    #10000;
-    uart.pc_send_byte(8'h00);
-    $display("li t2, 1");
-
-    #10000;
-    uart.pc_send_byte(8'h13);
-    #10000;
-    uart.pc_send_byte(8'h0e);
-    #10000;
-    uart.pc_send_byte(8'h20);
+    uart.pc_send_byte(8'h44);
     #10000;
     uart.pc_send_byte(8'h00);
-    $display("li t3, 2");
-
+    $display("addi s1, s1, 4");
+    
     #10000;
     uart.pc_send_byte(8'he3);
     #10000;
-    uart.pc_send_byte(8'h98);
+    uart.pc_send_byte(8'h94);
     #10000;
-    uart.pc_send_byte(8'h02);
+    uart.pc_send_byte(8'h62);
     #10000;
     uart.pc_send_byte(8'hfe);
-    #10000;
-    $display("bne t0, zero, .LC0");
+    $display("bne t0, t1, loop");
 
     #10000;
     uart.pc_send_byte(8'h67);
@@ -195,15 +266,15 @@ module tb;
     $display("send G");
     #10000;
 
-    uart.pc_send_byte(8'h08);
+    uart.pc_send_byte(8'h04);
     #10000;   
     uart.pc_send_byte(8'h00);
     #10000;
     uart.pc_send_byte(8'h00);
     #10000;
-    uart.pc_send_byte(8'h00); //send addr = 0x00000008
+    uart.pc_send_byte(8'h00); //send addr = 0x00000004
     #10000;
-    $display("send 00000008"); 
+    $display("send 00000004"); 
 
 
   end
