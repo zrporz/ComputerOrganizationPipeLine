@@ -486,7 +486,7 @@ module Csr#(
               sepc <= pc_now_i;
               scause.interrupt <= 1'b0;
               scause.exception_code <= priviledge_mode_reg == PRIVILEDGE_MODE_U ? 31'h8 : 31'h9;
-              msstatus.spp <= priviledge_mode_reg;
+              msstatus.spp <= priviledge_mode_reg[0];
               msstatus.spie <= msstatus.sie; 
               msstatus.sie <= 1'b0; 
               pc_next_en <= 1;
@@ -520,8 +520,14 @@ module Csr#(
             csr_timeinterrupt_rfwen_o <= 0;
             pc_next_en <= 1;
             pc_next_o <= sepc;
-            priviledge_mode_reg <= msstatus.spp;
-            msstatus.sie <= msstatus.spie;
+            priviledge_mode_reg <= {1'b0,msstatus.spp};
+            if(priviledge_mode_reg == PRIVILEDGE_MODE_U)begin
+              msstatus.sie <= 1'b1;
+            end else begin
+              msstatus.sie <= msstatus.spie;
+            end
+            msstatus.spie <= 1'b1;
+            msstatus.spp <= 1'b1;
             csr_timeinterrupt_rfwen_o <= 0;
             // msie.stie <= 1'b1; //???
           end
@@ -535,7 +541,7 @@ module Csr#(
                 stval <= if_exception_addr_i;
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= if_exception_code_i;
-                msstatus.spp <= priviledge_mode_reg;
+                msstatus.spp <= priviledge_mode_reg[0];
                 msstatus.spie <= msstatus.sie;
                 msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
@@ -562,7 +568,7 @@ module Csr#(
                 stval <= id_exception_instr_i;
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= 32'h2;
-                msstatus.spp <= priviledge_mode_reg;
+                msstatus.spp <= priviledge_mode_reg[0];
                 msstatus.spie <= msstatus.sie;
                 msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
@@ -591,7 +597,7 @@ module Csr#(
                 stval <= mem_exception_addr_i;
                 scause.interrupt <= 1'b0;
                 scause.exception_code <= mem_exception_code_i;
-                msstatus.spp <= priviledge_mode_reg;
+                msstatus.spp <= priviledge_mode_reg[0];
                 msstatus.spie <= msstatus.sie;
                 msstatus.sie <= 1'b0;
                 sepc <= pc_now_i;
@@ -657,7 +663,7 @@ module Csr#(
                   sepc <= wb0_pc_now_i;
                 end 
               end
-              msstatus.spp <= priviledge_mode_reg;
+              msstatus.spp <= priviledge_mode_reg[0];
               priviledge_mode_reg <= PRIVILEDGE_MODE_S;
               msstatus.spie <= msstatus.sie;
               msstatus.sie <= 1'b0;
