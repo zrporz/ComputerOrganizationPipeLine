@@ -628,8 +628,7 @@ module Csr#(
                   mepc <= idex_pc_now_i;
                 end else if(ifid_pc_now_i!=32'h8000_0000)begin
                   mepc <= ifid_pc_now_i;
-                end 
-                else begin
+                end else begin
                   mepc <= wb0_pc_now_i;
                 end 
               end
@@ -654,8 +653,7 @@ module Csr#(
                   sepc <= idex_pc_now_i;
                 end else if(ifid_pc_now_i!=32'h8000_0000)begin
                   sepc <= ifid_pc_now_i;
-                end 
-                else begin
+                end else begin
                   sepc <= wb0_pc_now_i;
                 end 
               end

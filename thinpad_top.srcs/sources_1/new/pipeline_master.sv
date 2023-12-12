@@ -971,8 +971,8 @@ module pipeline_master #(
         exme_mem_en <= 0;
         exme_instr_type_reg <= I_TYPE;
         exme_rf_wen <= 1; // Same to above
+        exme_pc_now_reg <= 32'h8000_0000;
         // exme_rpc_wen <= 0;
-        exme_pc_now_reg <= 32'b0;
         exme_if_exception_code_reg <= 31'b0;
         exme_exception_instr_reg <= 31'b0;
         exme_exception_instr_wen_reg <= 0;
@@ -991,7 +991,7 @@ module pipeline_master #(
           exme_instr_type_reg <= I_TYPE;
           exme_rf_wen <= 1; // Same to above
           // exme_rpc_wen <= 0;
-          exme_pc_now_reg <= 32'b0;
+          exme_pc_now_reg <= 32'h8000_0000;
           exme_if_exception_code_reg <= 31'b0;
           exme_exception_instr_reg <= 31'b0;
           exme_exception_instr_wen_reg <= 0;
