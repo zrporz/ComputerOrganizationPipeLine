@@ -67,4 +67,10 @@ typedef struct packed {
     logic [8:0] asid;
     logic [21:0] ppn;
 } satp_t;
+
+
+`define DM_MUX_SEL_PC 2'b00
+`define DM_MUX_SEL_ALU 2'b01
+`define DM_MUX_SEL_MEM 2'b10
+
 `endif
