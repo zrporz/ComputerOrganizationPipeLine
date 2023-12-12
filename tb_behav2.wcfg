@@ -5,9 +5,7 @@
    <db_ref_list>
       <db_ref path="tb_behav.wdb" id="1">
          <top_modules>
-            <top_module name="\$unit_mmu_tlb_sv " />
             <top_module name="\$unit_mtime_controller_sv " />
-            <top_module name="\$unit_pc_btb_sv " />
             <top_module name="\$unit_pipeline_master_sv " />
             <top_module name="\$unit_thinpad_top_sv " />
             <top_module name="glbl" />
@@ -16,15 +14,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="2055106069fs"></ZoomStartTime>
-      <ZoomEndTime time="2058210987fs"></ZoomEndTime>
-      <Cursor1Time time="2057693500fs"></Cursor1Time>
+      <ZoomStartTime time="22737771633fs"></ZoomStartTime>
+      <ZoomEndTime time="22744531634fs"></ZoomEndTime>
+      <Cursor1Time time="22738621633fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="311"></NameColumnWidth>
-      <ValueColumnWidth column_width="138"></ValueColumnWidth>
+      <ValueColumnWidth column_width="196"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="148" />
+   <WVObjectSize size="163" />
    <wvobject fp_name="/tb/dut/lab6_master/clk_i" type="logic">
       <obj_property name="ElementShortName">clk_i</obj_property>
       <obj_property name="ObjectShortName">clk_i</obj_property>
@@ -614,6 +612,66 @@
       <obj_property name="ObjectShortName">ADDR_WIDTH[31:0]</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/dut/lab6_master/u_pc_controller/DATA_WIDTH" type="array">
+      <obj_property name="ElementShortName">DATA_WIDTH[31:0]</obj_property>
+      <obj_property name="ObjectShortName">DATA_WIDTH[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/clk" type="logic">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/rst" type="logic">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/pc_now" type="array">
+      <obj_property name="ElementShortName">pc_now[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pc_now[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/pc_predict" type="array">
+      <obj_property name="ElementShortName">pc_predict[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pc_predict[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/branching" type="logic">
+      <obj_property name="ElementShortName">branching</obj_property>
+      <obj_property name="ObjectShortName">branching</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/exe_pc" type="array">
+      <obj_property name="ElementShortName">exe_pc[31:0]</obj_property>
+      <obj_property name="ObjectShortName">exe_pc[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/exe_pc_next" type="array">
+      <obj_property name="ElementShortName">exe_pc_next[31:0]</obj_property>
+      <obj_property name="ObjectShortName">exe_pc_next[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/pc_now_tag" type="array">
+      <obj_property name="ElementShortName">pc_now_tag[25:0]</obj_property>
+      <obj_property name="ObjectShortName">pc_now_tag[25:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/pc_now_index" type="array">
+      <obj_property name="ElementShortName">pc_now_index[3:0]</obj_property>
+      <obj_property name="ObjectShortName">pc_now_index[3:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/btb_table" type="array">
+      <obj_property name="ElementShortName">btb_table[0:15]</obj_property>
+      <obj_property name="ObjectShortName">btb_table[0:15]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/current_btb_entry" type="array">
+      <obj_property name="ElementShortName">current_btb_entry</obj_property>
+      <obj_property name="ObjectShortName">current_btb_entry</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/exe_pc_tag" type="array">
+      <obj_property name="ElementShortName">exe_pc_tag[25:0]</obj_property>
+      <obj_property name="ObjectShortName">exe_pc_tag[25:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/exe_pc_index" type="array">
+      <obj_property name="ElementShortName">exe_pc_index[3:0]</obj_property>
+      <obj_property name="ObjectShortName">exe_pc_index[3:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/ADDR_WIDTH" type="array">
+      <obj_property name="ElementShortName">ADDR_WIDTH[31:0]</obj_property>
+      <obj_property name="ObjectShortName">ADDR_WIDTH[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/lab6_master/u_pc_btb_table/DATA_WIDTH" type="array">
       <obj_property name="ElementShortName">DATA_WIDTH[31:0]</obj_property>
       <obj_property name="ObjectShortName">DATA_WIDTH[31:0]</obj_property>
    </wvobject>
