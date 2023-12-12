@@ -618,7 +618,7 @@ module Csr#(
               end
             end
             // For Interrupt (i.e. Time interruption)
-            else if(!mem_state_i && msip.mtip && msie.mtie && (priviledge_mode_reg != PRIVILEDGE_MODE_M || msstatus.mie))begin
+            else if(!mem_state_i && pc_now_i == 32'h8000_0000 && msip.mtip && msie.mtie && (priviledge_mode_reg != PRIVILEDGE_MODE_M || msstatus.mie))begin
               // Machine mode time-out interrupt
               mcause.interrupt <= 1'b1;
               mcause.exception_code <= 31'h7;
@@ -643,7 +643,7 @@ module Csr#(
               msstatus.mie <= 1'b0;
               priviledge_mode_reg <= PRIVILEDGE_MODE_M;
             end 
-            else if(!mem_state_i && msip.stip && msie.stie && (priviledge_mode_reg == PRIVILEDGE_MODE_U || (priviledge_mode_reg == PRIVILEDGE_MODE_S && msstatus.sie)))begin
+            else if(!mem_state_i && pc_now_i == 32'h8000_0000 && msip.stip && msie.stie && (priviledge_mode_reg == PRIVILEDGE_MODE_U || (priviledge_mode_reg == PRIVILEDGE_MODE_S && msstatus.sie)))begin
               // Superior mode time-out interrupt
               scause.interrupt <= 1'b1;
               csr_timeinterrupt_rfwen_o <= 0; /***important***/
