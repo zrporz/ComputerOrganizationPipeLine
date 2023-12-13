@@ -848,7 +848,7 @@ module pipeline_master #(
           idex_exception_instr_reg <= 31'b0;
           idex_exception_instr_wen_reg <= 0;
         end
-      end else if(bubble_ID) begin
+      else if(bubble_ID) begin
         if(!bubble_EXE) begin
           // ID-EXE
           idex_inst_reg <= 32'b0010011;
@@ -1456,7 +1456,12 @@ module pipeline_master #(
 
       // end
       end
+    end
   end
+
+  logic still_hazard;
+  logic [31:0] ID_data1;
+  logic [31:0] ID_data2;
 
   bypassing bypassing (
     .idex_rf_wen_i(idex_rf_wen),
@@ -1492,9 +1497,7 @@ module pipeline_master #(
     .still_hazard_o(still_hazard)
   );
 
-  logic still_hazard;
-  logic [31:0] ID_data1;
-  logic [31:0] ID_data2;
+  
 
 
 
