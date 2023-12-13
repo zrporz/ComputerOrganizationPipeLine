@@ -2,6 +2,7 @@ module hazard_controler#(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32
 ) (
+    input wire still_hazard_i,
     input wire wb1_cyc_i,
     input wire wb1_ack_i,
     input wire wb0_cyc_i,
@@ -68,26 +69,27 @@ module hazard_controler#(
           bubble_EXE_o = 1;
           bubble_MEM_o = 1;
         end else if(rf_rdata_a_i)begin
-          if(idex_rf_wen_i && rf_rdata_a_i == idex_rf_waddr_reg_i )begin
+          // these three could be solved by bypassing unit
+          if(idex_rf_wen_i && rf_rdata_a_i == idex_rf_waddr_reg_i && still_hazard_i)begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
-          end else if (exme_rf_wen_i && rf_rdata_a_i == exme_rf_waddr_reg_i)begin
+          end else if (exme_rf_wen_i && rf_rdata_a_i == exme_rf_waddr_reg_i && still_hazard_i)begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
-          end else if(mewb_rf_wen_i && rf_rdata_a_i == mewb_rf_waddr_reg_i) begin
+          end else if(mewb_rf_wen_i && rf_rdata_a_i == mewb_rf_waddr_reg_i && still_hazard_i) begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
           end else if(wb0_cyc_i && wb0_ack_i!=1)begin // IF is reading and it hasn't complete yet
             bubble_IF_o = 1;
           end 
         end else if(use_rs2_i && rf_rdata_b_i)begin
-          if(idex_rf_wen_i && rf_rdata_b_i == idex_rf_waddr_reg_i )begin
+          if(idex_rf_wen_i && rf_rdata_b_i == idex_rf_waddr_reg_i && still_hazard_i)begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
-          end else if (exme_rf_wen_i && rf_rdata_b_i == exme_rf_waddr_reg_i)begin
+          end else if (exme_rf_wen_i && rf_rdata_b_i == exme_rf_waddr_reg_i && still_hazard_i)begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
-          end else if(mewb_rf_wen_i && rf_rdata_b_i == mewb_rf_waddr_reg_i) begin
+          end else if(mewb_rf_wen_i && rf_rdata_b_i == mewb_rf_waddr_reg_i && still_hazard_i) begin
             bubble_IF_o = 1;
             bubble_ID_o = 1;
           end else if(wb0_cyc_i && wb0_ack_i!=1)begin // IF is reading and it hasn't complete yet

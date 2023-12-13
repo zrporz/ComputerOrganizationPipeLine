@@ -51,8 +51,8 @@ module tb;
   // parameter FLASH_INIT_FILE = "/tmp/kernel.elf";  // Flash 初始化文件，请修改为实际的绝对路�?
   // parameter BASE_RAM_INIT_FILE = "C:\\Users\\tehaj\\Desktop\\code\\ComputerOrganizaion\\rv-2023\\supervisor-rv\\kernel\\kernel.bin"; // BaseRAM 初始化文件，请修改为实际的绝对路�???
   // parameter BASE_RAM_INIT_FILE = "E:\\CSAPP-2\\project\\kernel_v2.bin";
-  // parameter BASE_RAM_INIT_FILE = "E:\\rv-2023-new\\rv-2023\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
-  parameter BASE_RAM_INIT_FILE = "D:\\Desktop\\23falll\\codes\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
+  parameter BASE_RAM_INIT_FILE = "E:\\rv-2023-v2\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
+  // parameter BASE_RAM_INIT_FILE = "D:\\Desktop\\23falll\\codes\\rv-2023\\supervisor-rv\\kernel\\kernel.bin";
   parameter EXT_RAM_INIT_FILE = "/tmp/eram.bin";  // ExtRAM 初始化文件，请修改为实际的绝对路�???
   parameter FLASH_INIT_FILE = "/tmp/kernel.elf";  // Flash 初始化文件，请修改为实际的绝对路�???
 
