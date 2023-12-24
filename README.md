@@ -1,4 +1,4 @@
-![Untitled](./assets/Untitled 40.png)
+![Untitled](assets/Untitled%2040.png)
 
 # 五级流水线 RISC-V 处理器实验报告
 
