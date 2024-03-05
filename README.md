@@ -2,7 +2,7 @@
 
 **编号：cod23-grp50    成员：范孙奇 邱小轩 周韧平**
 
-[code](https://github.com/zrporz/ComputerOrganizationPipeLine/blob/ucore-check) | [report](https://zrp21.notion.site/RISC-V-2e8ce77bfc76421487782a2dbc49432e?pvs=74) | [Document](https://somber-cormorant-c06.notion.site/f1a6dc8472d944759db0942bf59193fa)
+[code](https://github.com/zrporz/ComputerOrganizationPipeLine/blob/ucore-check) | [report](https://zrp21.notion.site/RISC-V-2e8ce77bfc76421487782a2dbc49432e?pvs=74) | [Document](https://zrp21.notion.site/f1a6dc8472d944759db0942bf59193fa)
 
 一个简易ucore实现
 
